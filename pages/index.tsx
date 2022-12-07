@@ -19,11 +19,11 @@ function downloadObjectAsJson(exportObj: Record<string, unknown>, exportName: st
   downloadAnchorNode.remove();
 }
 
-const DEFAULT_STRAPI_ENDPOINT = 'http://localhost:1337';
+const DEFAULT_STRAPI_ENDPOINT = 'http://localhost:1337/dumps';
 
 const Input = ({ value , onChange}: {value: string, onChange: (newValue: string) => void}) => {
   return (
-    <input type="text" className='bg-card-input rounded-sm px-4 py-2 border-2 border-gray-600 w-[250px]' value={value} onChange={(e) => onChange(e.currentTarget.value)} />
+    <input type="text" className='bg-card-input rounded-sm px-4 py-2 border-2 border-gray-600 w-[300px]' value={value} onChange={(e) => onChange(e.currentTarget.value)} />
   )
 }
 
@@ -92,7 +92,7 @@ export default function Home() {
           <ul className='mt-2'>
             {routes.map(route => (
               <li key={route} className="flex">
-                <p className='bg-card-input border border-gray-600 mb-2 p-2 w-[250px]'>{`/${route}`}</p>
+                <p className='bg-card-input border border-gray-600 mb-2 p-2 w-[300px]'>{`/${route}`}</p>
                 <button type="button" onClick={() => onRouteRemove(route)}><RemoveIcon /></button>
               </li>
             ))}
@@ -109,7 +109,7 @@ export default function Home() {
                   {route}
                   <DuplicateIcon />
                 </div>
-                <JSONPretty className='w-full overflow-scroll max-h-[300px]' data={jsonData} />
+                <JSONPretty className='w-full overflow-scroll no-scrollbar max-h-[300px]' themeClassName='__json-pretty__ no-scrollbar' data={jsonData} />
               </div>
             ))}
           </div>
