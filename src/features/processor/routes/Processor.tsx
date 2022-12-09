@@ -82,6 +82,13 @@ const isFile = (val: unknown) => {
   return fileSchema.safeParse(val).success;
 };
 
+type ProcessedModel = {
+  entityName: string;
+  fileName: string;
+  url: string;
+  hint: string;
+};
+
 enum StrapiTypes {
   RichText = "richtext",
   String = "string",
@@ -94,58 +101,61 @@ enum StrapiTypes {
 export const Processor = ({ jsonData }: Props) => {
   const [schema, setSchema] =
     useState<Record<string, Record<string, StrapiTypes>>>();
-  const [processedModels, setProcessedModels] = useState<
-    { entityName: string; fileName: string; url: string; hint: string }[]
-  >([]);
+  const [processedModels, setProcessedModels] = useState<ProcessedModel[]>([]);
 
   const disabled = Object.keys(jsonData).length === 0;
   const showProcessed = !disabled;
 
   const handleProcess = () => {
-    const dataPerEntity = parseArray(jsonData["athletes"]);
-    if (!parseArray(dataPerEntity)) return;
+    const formedSchema:
+      | Record<string, Record<string, StrapiTypes>>
+      | undefined = {};
+    Object.entries(jsonData).forEach(([entity, entityData]) => {
+      const dataPerEntity = parseArray(entityData);
+      if (!parseArray(dataPerEntity)) return;
 
-    const keyToTypeMap: Record<string, StrapiTypes> = {};
-    dataPerEntity.forEach((entityObject) => {
-      const parsedEntityObject = parseObject(entityObject);
+      const keyToTypeMap: Record<string, StrapiTypes> = {};
+      dataPerEntity.forEach((entityObject) => {
+        const parsedEntityObject = parseObject(entityObject);
 
-      const availableKeys = Object.keys(parsedEntityObject);
+        const availableKeys = Object.keys(parsedEntityObject);
 
-      availableKeys.forEach((availableKey) => {
-        // e.g _id, name
-        const availableValue = parsedEntityObject[availableKey];
+        availableKeys.forEach((availableKey) => {
+          // e.g _id, name
+          const availableValue = parsedEntityObject[availableKey];
 
-        if (isDate(availableValue)) {
-          keyToTypeMap[availableKey] = StrapiTypes.Date;
-          return;
-        }
+          if (isDate(availableValue)) {
+            keyToTypeMap[availableKey] = StrapiTypes.Date;
+            return;
+          }
 
-        if (
-          isString(availableValue) &&
-          keyToTypeMap[availableKey] !== StrapiTypes.RichText
-        ) {
-          if (isHtml(availableValue))
-            keyToTypeMap[availableKey] = StrapiTypes.RichText;
-          else keyToTypeMap[availableKey] = StrapiTypes.String;
-          return;
-        }
+          if (
+            isString(availableValue) &&
+            keyToTypeMap[availableKey] !== StrapiTypes.RichText
+          ) {
+            if (isHtml(availableValue))
+              keyToTypeMap[availableKey] = StrapiTypes.RichText;
+            else keyToTypeMap[availableKey] = StrapiTypes.String;
+            return;
+          }
 
-        if (isFile(availableValue)) {
-          keyToTypeMap[availableKey] = StrapiTypes.Media;
-          return;
-        }
+          if (isFile(availableValue)) {
+            keyToTypeMap[availableKey] = StrapiTypes.Media;
+            return;
+          }
 
-        if (isComponent(availableValue)) {
-          keyToTypeMap[availableKey] = StrapiTypes.Component;
-          return;
-        }
+          if (isComponent(availableValue)) {
+            keyToTypeMap[availableKey] = StrapiTypes.Component;
+            return;
+          }
+        });
       });
+
+      console.log("***", keyToTypeMap);
+      formedSchema[entity] = keyToTypeMap;
     });
 
-    console.log("***", keyToTypeMap);
-    setSchema({
-      athletes: keyToTypeMap,
-    });
+    setSchema(formedSchema);
   };
 
   const handleFieldRemove = (field: string) => {
@@ -157,110 +167,73 @@ export const Processor = ({ jsonData }: Props) => {
   const handleSchemaGeneration = () => {
     if (!schema) return;
 
-    const formedSchema: Record<string, any> = {
-      kind: "collectionType",
-      collectionName: "athletes",
-      info: {
-        singularName: "athletes".slice(0, -1),
-        displayName: "athletes".slice(0, -1),
-        pluralName: "athletes",
-      },
-      options: {
-        draftAndPublish: true,
-      },
-      pluginOptions: {},
-      //   "attributes": {
-      //     "name": {
-      //       "type": "string",
-      //       "required": true,
-      //       "unique": true
-      //     },
-      //     "bio": {
-      //       "type": "richtext",
-      //       "required": true
-      //     },
-      //     "socials": {
-      //       "displayName": "socials",
-      //       "type": "component",
-      //       "repeatable": false,
-      //       "component": "socials.socials",
-      //       "required": true
-      //     },
-      //     "facebook": {
-      //       "type": "string"
-      //     },
-      //     "instagram": {
-      //       "type": "string"
-      //     },
-      //     "youtube": {
-      //       "type": "string"
-      //     },
-      //     "twitter": {
-      //       "type": "string"
-      //     },
-      //     "image": {
-      //       "allowedTypes": [
-      //         "images"
-      //       ],
-      //       "type": "media",
-      //       "multiple": false,
-      //       "required": true
-      //     }
-      //   }
-      //
-
-      // const attrs: any = {};
-      // const a = schema[collectionName];
-      // Object.entries(schema[collectionName]).forEach(([field, value]) => {
-      //
-      // })
-    };
-
-    const attributes: Record<string, any> = {};
-    const components: Record<string, any>[] = [];
-
-    Object.entries(schema["athletes"]).forEach(([field, fieldType]) => {
-      attributes[field] = {
-        type: fieldType,
-        required: false, // TODO: to be added
-        unique: false, // TODO: to be added
+    const formedSchemas: ProcessedModel[] = [];
+    Object.entries(schema).forEach(([entity, entityField]) => {
+      const formedSchema: Record<string, any> = {
+        kind: "collectionType",
+        collectionName: entity,
+        info: {
+          singularName: entity.slice(0, -1),
+          displayName: entity.slice(0, -1),
+          pluralName: entity,
+        },
+        options: {
+          draftAndPublish: true,
+        },
+        pluginOptions: {},
       };
 
-      if (fieldType === StrapiTypes.Component) {
-        attributes[field].displayName = field;
-        attributes[field].repeatable = false; // TODO: add this option
-        attributes[field].component = `${field}.${field}`; // TODO: very imporant step for creation component schema, e.g socials.socials
-        components.push({
-          collectionName: `components_${attributes[field].component}`, // e.g components_socials_socials
-          info: {
-            displayName: attributes[field].displayName,
-          },
-          options: {},
-          attributes: {},
-        });
-      }
+      const attributes: Record<string, any> = {};
+      const components: Record<string, any>[] = [];
 
-      if (fieldType === StrapiTypes.Media) {
-        attributes[field].multiple = false; // TODO: add this option
-        attributes[field].allowedTypes = ["images"]; // TODO: handle this option
-      }
-    });
+      Object.entries(entityField).forEach(([field, fieldType]) => {
+        attributes[field] = {
+          type: fieldType,
+          required: false, // TODO: to be added
+          unique: false, // TODO: to be added
+        };
 
-    formedSchema.attributes = attributes;
-    setProcessedModels([
-      {
+        if (fieldType === StrapiTypes.Component) {
+          attributes[field].displayName = field;
+          attributes[field].repeatable = false; // TODO: add this option
+          attributes[field].component = `${field}.${field}`; // TODO: very imporant step for creation component schema, e.g socials.socials
+          components.push({
+            collectionName: `components_${attributes[field].component}`, // e.g components_socials_socials
+            info: {
+              displayName: attributes[field].displayName,
+            },
+            options: {},
+            attributes: {},
+          });
+        }
+
+        if (fieldType === StrapiTypes.Media) {
+          attributes[field].multiple = false; // TODO: add this option
+          attributes[field].allowedTypes = ["images"]; // TODO: handle this option
+        }
+      });
+
+      formedSchema.attributes = attributes;
+
+      formedSchemas.push({
         entityName: "athletes",
         fileName: "schema.json",
         url: getUrlToJson(formedSchema),
         hint: "ROOT_DIR/src/api/athlete/content-types/athlete/schema.json", //TODO: make dynamic
-      },
-      ...components.map((component) => ({
-        entityName: component.info.displayName,
-        fileName: `${component.info.displayName}.json`,
-        url: getUrlToJson(component),
-        hint: "ROOT_DIR/src/components/socials/socials.json", //TODO: make dynamic
-      })),
-    ]);
+      });
+
+      formedSchemas.push(
+        ...components.map((component) => ({
+          entityName: component.info.displayName,
+          fileName: `${component.info.displayName}.json`,
+          url: getUrlToJson(component),
+          hint: "ROOT_DIR/src/components/socials/socials.json", //TODO: make dynamic
+        }))
+      );
+
+    });
+
+    setProcessedModels(formedSchemas);
   };
 
   return (
@@ -354,7 +327,9 @@ export const Processor = ({ jsonData }: Props) => {
             >
               {processedModel.fileName}
             </a>
-            <Text className="text-gray-400 text-sm">(HINT: Move to {processedModel.hint})</Text>
+            <Text className="text-gray-400 text-sm">
+              (HINT: Move to {processedModel.hint})
+            </Text>
           </li>
         ))}
       </ul>

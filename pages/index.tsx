@@ -52,7 +52,7 @@ export default function Home() {
   const [routes, setRoutes] = useState<string[]>([]);
   const [routesJsonMap, setRoutesJsonMap] = useState<Record<string, unknown>>({
     athletes: testData,
-    exercises: testData2,
+    categories: testData2,
   });
 
   const onRouteAdd = () => {
