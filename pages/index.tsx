@@ -5,26 +5,15 @@ import axios from "axios";
 import Head from "next/head";
 import { ReactNode, useState } from "react";
 import JSONPretty from "react-json-pretty";
+import testData from "../src/features/processor/consts/testData.json";
+import testData2 from "../src/features/processor/consts/categories.json";
 import { AddIcon } from "../assets/AddIcon";
 import { DuplicateIcon } from "../assets/DuplicateIcon";
 import { RemoveIcon } from "../assets/RemoveIcon";
 import Button from "../src/components/Button";
 import { Processor } from "../src/features/processor";
-
-function downloadObjectAsJson(
-  exportObj: Record<string, unknown>,
-  exportName: string
-) {
-  const dataStr =
-    "data:text/json;charset=utf-8," +
-    encodeURIComponent(JSON.stringify(exportObj));
-  const downloadAnchorNode = document.createElement("a");
-  downloadAnchorNode.setAttribute("href", dataStr);
-  downloadAnchorNode.setAttribute("download", exportName + ".json");
-  document.body.appendChild(downloadAnchorNode); // required for firefox
-  downloadAnchorNode.click();
-  downloadAnchorNode.remove();
-}
+import { Subtitle, Title } from "../src/components/Typography";
+import { downloadObjectAsJson } from "../src/utils/downloadObjectAsJson";
 
 const DEFAULT_STRAPI_ENDPOINT = "http://localhost:1337/dumps";
 
@@ -52,19 +41,19 @@ type Props = {
 const CardPane = ({ title, children }: Props) => {
   return (
     <div className="bg-bg-primary mb-4 p-8 rounded-md">
-      <h3 className="text-gray-200 text-2xl mb-4">{title}</h3>
+      <Title>{title}</Title>
       {children}
     </div>
   );
 };
-
 export default function Home() {
   const [endpoint, setEndpoint] = useState(DEFAULT_STRAPI_ENDPOINT);
   const [route, setRoute] = useState("example");
   const [routes, setRoutes] = useState<string[]>([]);
-  const [routesJsonMap, setRoutesJsonMap] = useState<
-    Record<string, Record<string, unknown>>
-  >({});
+  const [routesJsonMap, setRoutesJsonMap] = useState<Record<string, unknown>>({
+    athletes: testData,
+    exercises: testData2,
+  });
 
   const onRouteAdd = () => {
     setRoutes([...routes, route]);
@@ -120,7 +109,11 @@ export default function Home() {
             {routes.map((route) => (
               <li key={route} className="flex">
                 <p className="bg-card-input border border-gray-600 mb-2 p-2 w-[300px]">{`/${route}`}</p>
-                <button className="ml-2" type="button" onClick={() => onRouteRemove(route)}>
+                <button
+                  className="ml-2"
+                  type="button"
+                  onClick={() => onRouteRemove(route)}
+                >
                   <RemoveIcon />
                 </button>
               </li>
@@ -128,11 +121,11 @@ export default function Home() {
           </ul>
         </CardPane>
 
-        <Button 
-          disabled={routes.length === 0}
-          onClick={dumpStrapi}>Generate JSON</Button>
+        <Button disabled={routes.length === 0} onClick={dumpStrapi}>
+          Generate JSON
+        </Button>
 
-        <h4 className="text-xl mt-4">Results</h4>
+        <Subtitle>Results</Subtitle>
         <div className="flex flex-col gap-2 mt-8">
           {Object.entries(routesJsonMap).map(([route, jsonData]) => (
             <div key={route} className="flex-1 overflow-hidden min-w-[350px]">
@@ -152,7 +145,7 @@ export default function Home() {
           ))}
         </div>
 
-          <Processor jsonData={routesJsonMap} />
+        <Processor jsonData={routesJsonMap} />
       </main>
     </div>
   );
