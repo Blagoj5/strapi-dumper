@@ -116,25 +116,41 @@ export const Processor = ({ jsonData }: Props) => {
 
   const handleProcess = () => {
     const formedSchema: Schema = {};
-    // TODO: add logic for figuring out required, unique
+
+    // new Set<string>
+    const availableKeysMap: Record<string, Set<string>> = {};
     Object.entries(jsonData).forEach(([entity, entityData]) => {
+      availableKeysMap[entity] = new Set<string>();
       const dataPerEntity = parseArray(entityData);
       if (!parseArray(dataPerEntity)) return;
-
-      const keyToTypeMap: Schema[string] = {};
       dataPerEntity.forEach((entityObject) => {
         const parsedEntityObject = parseObject(entityObject);
+        Object.keys(parsedEntityObject).forEach((availableKey) => {
+          availableKeysMap[entity].add(availableKey);
+        });
+      });
+    });
 
-        const availableKeys = Object.keys(parsedEntityObject);
+    Object.entries(availableKeysMap).forEach(([entity, fields]) => {
+      const keyToTypeMap: Schema[string] = {};
+      fields.forEach((field) => {
+        const dataPerEntity = parseArray(jsonData[entity]);
+        let isRequired = true;
 
-        // e.g _id, name
-        availableKeys.forEach((availableKey) => {
-          const availableValue = parsedEntityObject[availableKey];
+        let isUniqueString = true;
+        const uniqueValues: string[] = [];
+        dataPerEntity.forEach((entityObject) => {
+          const parsedEntityObject = parseObject(entityObject);
+
+          const availableValue = parsedEntityObject[field];
+
+          // if it's missing available value
+          if (!availableValue) isRequired = false;
 
           if (isDate(availableValue)) {
-            keyToTypeMap[availableKey] = {
+            keyToTypeMap[field] = {
               type: StrapiTypes.Date,
-              required: false,
+              required: isRequired,
               unique: false,
             };
             return;
@@ -142,31 +158,33 @@ export const Processor = ({ jsonData }: Props) => {
 
           if (
             isString(availableValue) &&
-            keyToTypeMap[availableKey]?.type !== StrapiTypes.RichText
+            keyToTypeMap[field]?.type !== StrapiTypes.RichText
           ) {
-            keyToTypeMap[availableKey] = {
+            if (uniqueValues.includes(availableValue)) isUniqueString = false;
+            keyToTypeMap[field] = {
               type: isHTML(availableValue)
                 ? StrapiTypes.RichText
                 : StrapiTypes.String,
-              required: false,
-              unique: false,
+              required: isRequired,
+              unique: isUniqueString,
             };
+            uniqueValues.push(availableValue);
             return;
           }
 
           if (isFile(availableValue)) {
-            keyToTypeMap[availableKey] = {
+            keyToTypeMap[field] = {
               type: StrapiTypes.Media,
-              required: false,
+              required: isRequired,
               unique: false,
             };
             return;
           }
 
           if (isComponent(availableValue)) {
-            keyToTypeMap[availableKey] = {
+            keyToTypeMap[field] = {
               type: StrapiTypes.Component,
-              required: false,
+              required: isRequired,
               unique: false,
             };
             return;
@@ -174,16 +192,15 @@ export const Processor = ({ jsonData }: Props) => {
         });
       });
 
-      console.log("***", keyToTypeMap);
       formedSchema[entity] = keyToTypeMap;
     });
 
     setSchema(formedSchema);
   };
 
-  const handleFieldRemove = (field: string) => {
+  const handleFieldRemove = (entity: string, field: string) => {
     const newSchema = { ...schema };
-    delete newSchema[field];
+    delete newSchema[entity][field];
     setSchema(newSchema);
   };
 
@@ -259,10 +276,17 @@ export const Processor = ({ jsonData }: Props) => {
     setProcessedModels(formedSchemas);
   };
 
-  const handleRequired = (
-    isChecked: boolean,
-    entity: string,
-    field: string
+  const handleFieldFlagToggle = (
+    {
+      isChecked,
+      entity,
+      field,
+    }: {
+      isChecked: boolean;
+      entity: string;
+      field: string;
+    },
+    flagField: "unique" | "required"
   ) => {
     const entityValue = schema?.[entity];
     const fieldValue = entityValue?.[field];
@@ -273,14 +297,26 @@ export const Processor = ({ jsonData }: Props) => {
         ...entityValue,
         [field]: {
           ...fieldValue,
-          required: isChecked,
+          [flagField]: isChecked,
         },
       },
     });
   };
 
-  const handleUnique = (isChecked: boolean) => {
-    console.log(isChecked);
+  const handleRequired = (args: {
+    isChecked: boolean;
+    entity: string;
+    field: string;
+  }) => {
+    handleFieldFlagToggle(args, "required");
+  };
+
+  const handleUnique = (args: {
+    isChecked: boolean;
+    entity: string;
+    field: string;
+  }) => {
+    handleFieldFlagToggle(args, "unique");
   };
 
   return (
@@ -333,7 +369,13 @@ export const Processor = ({ jsonData }: Props) => {
                     <div className="w-40 flex justify-center items-center">
                       <input
                         type="checkbox"
-                        onChange={(e) => handleRequired(e.currentTarget.checked, entity, field)}
+                        onChange={(e) =>
+                          handleRequired({
+                            isChecked: e.currentTarget.checked,
+                            entity,
+                            field,
+                          })
+                        }
                         checked={fieldValue.required}
                         className="w-6 h-6"
                         id={`${field}-required`}
@@ -344,7 +386,13 @@ export const Processor = ({ jsonData }: Props) => {
                     <div className="w-40 flex justify-center items-center">
                       <input
                         type="checkbox"
-                        onClick={(e) => handleUnique(e.currentTarget.checked)}
+                        onClick={(e) =>
+                          handleUnique({
+                            isChecked: e.currentTarget.checked,
+                            entity,
+                            field,
+                          })
+                        }
                         checked={fieldValue.unique}
                         className="w-6 h-6"
                         id={`${field}-unique`}
@@ -354,7 +402,7 @@ export const Processor = ({ jsonData }: Props) => {
                     </div>
                     <RemoveIcon
                       className="text-primary ml-4"
-                      onClick={() => handleFieldRemove(field)}
+                      onClick={() => handleFieldRemove(entity, field)}
                     />
                   </div>
                 ))}
