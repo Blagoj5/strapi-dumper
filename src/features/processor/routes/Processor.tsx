@@ -1,4 +1,4 @@
-import isHtml from "is-html";
+import isHTML from "is-html";
 import React, { useState } from "react";
 import { z } from "zod";
 import { RemoveIcon } from "../../../../assets/RemoveIcon";
@@ -98,54 +98,77 @@ enum StrapiTypes {
   Media = "media",
 }
 
+type Schema = {
+  [entity: string]: {
+    [field: string]: {
+      type: StrapiTypes;
+      required: boolean;
+      unique: boolean;
+    };
+  };
+};
 export const Processor = ({ jsonData }: Props) => {
-  const [schema, setSchema] =
-    useState<Record<string, Record<string, StrapiTypes>>>();
+  const [schema, setSchema] = useState<Schema>();
   const [processedModels, setProcessedModels] = useState<ProcessedModel[]>([]);
 
   const disabled = Object.keys(jsonData).length === 0;
   const showProcessed = !disabled;
 
   const handleProcess = () => {
-    const formedSchema:
-      | Record<string, Record<string, StrapiTypes>>
-      | undefined = {};
+    const formedSchema: Schema = {};
+    // TODO: add logic for figuring out required, unique
     Object.entries(jsonData).forEach(([entity, entityData]) => {
       const dataPerEntity = parseArray(entityData);
       if (!parseArray(dataPerEntity)) return;
 
-      const keyToTypeMap: Record<string, StrapiTypes> = {};
+      const keyToTypeMap: Schema[string] = {};
       dataPerEntity.forEach((entityObject) => {
         const parsedEntityObject = parseObject(entityObject);
 
         const availableKeys = Object.keys(parsedEntityObject);
 
+        // e.g _id, name
         availableKeys.forEach((availableKey) => {
-          // e.g _id, name
           const availableValue = parsedEntityObject[availableKey];
 
           if (isDate(availableValue)) {
-            keyToTypeMap[availableKey] = StrapiTypes.Date;
+            keyToTypeMap[availableKey] = {
+              type: StrapiTypes.Date,
+              required: false,
+              unique: false,
+            };
             return;
           }
 
           if (
             isString(availableValue) &&
-            keyToTypeMap[availableKey] !== StrapiTypes.RichText
+            keyToTypeMap[availableKey]?.type !== StrapiTypes.RichText
           ) {
-            if (isHtml(availableValue))
-              keyToTypeMap[availableKey] = StrapiTypes.RichText;
-            else keyToTypeMap[availableKey] = StrapiTypes.String;
+            keyToTypeMap[availableKey] = {
+              type: isHTML(availableValue)
+                ? StrapiTypes.RichText
+                : StrapiTypes.String,
+              required: false,
+              unique: false,
+            };
             return;
           }
 
           if (isFile(availableValue)) {
-            keyToTypeMap[availableKey] = StrapiTypes.Media;
+            keyToTypeMap[availableKey] = {
+              type: StrapiTypes.Media,
+              required: false,
+              unique: false,
+            };
             return;
           }
 
           if (isComponent(availableValue)) {
-            keyToTypeMap[availableKey] = StrapiTypes.Component;
+            keyToTypeMap[availableKey] = {
+              type: StrapiTypes.Component,
+              required: false,
+              unique: false,
+            };
             return;
           }
         });
@@ -169,12 +192,17 @@ export const Processor = ({ jsonData }: Props) => {
 
     const formedSchemas: ProcessedModel[] = [];
     Object.entries(schema).forEach(([entity, entityField]) => {
+      // e.g categories => category, choices => choice
+      const singularEntity = entity.endsWith("ies")
+        ? `${entity.slice(0, -3)}y`
+        : entity.slice(0, -1);
+
       const formedSchema: Record<string, any> = {
         kind: "collectionType",
         collectionName: entity,
         info: {
-          singularName: entity.slice(0, -1),
-          displayName: entity.slice(0, -1),
+          singularName: singularEntity,
+          displayName: singularEntity,
           pluralName: entity,
         },
         options: {
@@ -186,14 +214,10 @@ export const Processor = ({ jsonData }: Props) => {
       const attributes: Record<string, any> = {};
       const components: Record<string, any>[] = [];
 
-      Object.entries(entityField).forEach(([field, fieldType]) => {
-        attributes[field] = {
-          type: fieldType,
-          required: false, // TODO: to be added
-          unique: false, // TODO: to be added
-        };
+      Object.entries(entityField).forEach(([field, fieldValue]) => {
+        attributes[field] = fieldValue;
 
-        if (fieldType === StrapiTypes.Component) {
+        if (fieldValue.type === StrapiTypes.Component) {
           attributes[field].displayName = field;
           attributes[field].repeatable = false; // TODO: add this option
           attributes[field].component = `${field}.${field}`; // TODO: very imporant step for creation component schema, e.g socials.socials
@@ -207,7 +231,7 @@ export const Processor = ({ jsonData }: Props) => {
           });
         }
 
-        if (fieldType === StrapiTypes.Media) {
+        if (fieldValue.type === StrapiTypes.Media) {
           attributes[field].multiple = false; // TODO: add this option
           attributes[field].allowedTypes = ["images"]; // TODO: handle this option
         }
@@ -216,10 +240,10 @@ export const Processor = ({ jsonData }: Props) => {
       formedSchema.attributes = attributes;
 
       formedSchemas.push({
-        entityName: "athletes",
+        entityName: entity,
         fileName: "schema.json",
         url: getUrlToJson(formedSchema),
-        hint: "ROOT_DIR/src/api/athlete/content-types/athlete/schema.json", //TODO: make dynamic
+        hint: `ROOT_DIR/src/api/${singularEntity}/content-types/${singularEntity}/schema.json`, //TODO: make dynamic
       });
 
       formedSchemas.push(
@@ -227,13 +251,36 @@ export const Processor = ({ jsonData }: Props) => {
           entityName: component.info.displayName,
           fileName: `${component.info.displayName}.json`,
           url: getUrlToJson(component),
-          hint: "ROOT_DIR/src/components/socials/socials.json", //TODO: make dynamic
+          hint: `ROOT_DIR/src/components/${component.info.displayName}/socials.json`, //TODO: make dynamic
         }))
       );
-
     });
 
     setProcessedModels(formedSchemas);
+  };
+
+  const handleRequired = (
+    isChecked: boolean,
+    entity: string,
+    field: string
+  ) => {
+    const entityValue = schema?.[entity];
+    const fieldValue = entityValue?.[field];
+    if (!fieldValue || !entityValue) return;
+    setSchema({
+      ...schema,
+      [entity]: {
+        ...entityValue,
+        [field]: {
+          ...fieldValue,
+          required: isChecked,
+        },
+      },
+    });
+  };
+
+  const handleUnique = (isChecked: boolean) => {
+    console.log(isChecked);
   };
 
   return (
@@ -259,11 +306,11 @@ export const Processor = ({ jsonData }: Props) => {
                 <Text className="w-40 font-bold flex-shrink-0">Remove</Text>
               </div>
               <div className="flex flex-col gap-2">
-                {Object.entries(entitySchema).map(([key, valType]) => (
-                  <div key={key} className="flex align-middle">
-                    <Text className="w-40">{key}</Text>
+                {Object.entries(entitySchema).map(([field, fieldValue]) => (
+                  <div key={field} className="flex align-middle">
+                    <Text className="w-40">{field}</Text>
                     <select
-                      value={valType}
+                      value={fieldValue.type}
                       className="bg-transparent font-bold text-white opacity-70 rounded-2 py-2 px-2 focus-visible:outline-0"
                     >
                       {Object.values(StrapiTypes).map((strapiType) => (
@@ -279,33 +326,35 @@ export const Processor = ({ jsonData }: Props) => {
                     </select>
                     <input
                       type="text"
-                      value={key}
+                      value={field}
                       className="bg-black bg-opacity-30 w-40 font-bold text-white opacity-70 rounded-2 py-2 px-2 focus-visible:outline-0 ml-4 rounded-lg border border-transparent focus:border focus:border-gray-600"
                       disabled
                     />
                     <div className="w-40 flex justify-center items-center">
                       <input
                         type="checkbox"
-                        disabled
+                        onChange={(e) => handleRequired(e.currentTarget.checked, entity, field)}
+                        checked={fieldValue.required}
                         className="w-6 h-6"
-                        id={`${key}-required`}
-                        name={`${key}-required`}
-                        value={`${key}-required`}
+                        id={`${field}-required`}
+                        name={`${field}-required`}
+                        value={`${field}-required`}
                       />
                     </div>
                     <div className="w-40 flex justify-center items-center">
                       <input
                         type="checkbox"
-                        disabled
+                        onClick={(e) => handleUnique(e.currentTarget.checked)}
+                        checked={fieldValue.unique}
                         className="w-6 h-6"
-                        id={`${key}-unique`}
-                        name={`${key}-unique`}
-                        value={`${key}-unique`}
+                        id={`${field}-unique`}
+                        name={`${field}-unique`}
+                        value={`${field}-unique`}
                       />
                     </div>
                     <RemoveIcon
                       className="text-primary ml-4"
-                      onClick={() => handleFieldRemove(key)}
+                      onClick={() => handleFieldRemove(field)}
                     />
                   </div>
                 ))}
