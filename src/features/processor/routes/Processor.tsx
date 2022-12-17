@@ -1,112 +1,60 @@
+import clsx from "clsx";
 import isHTML from "is-html";
 import React, { useState } from "react";
-import { z } from "zod";
 import { RemoveIcon } from "../../../../assets/RemoveIcon";
 import Button from "../../../components/Button";
 import { Subtitle, Text } from "../../../components/Typography";
 import { getUrlToJson } from "../../../utils/downloadObjectAsJson";
+import { StrapiSchema } from "../components/StrapiSchema";
+import { reserverdFields } from "../consts/reservedFields";
+import {
+  isBoolean,
+  isComponent,
+  isDate,
+  isFile,
+  isNullish,
+  isNumber,
+  isString,
+  parseArray,
+  parseObject,
+  ProcessedModel,
+  Schema,
+  StrapiTypes,
+} from "../consts/types";
 
 type Props = {
   jsonData: Record<string, unknown>;
 };
-const dateSchema = z.preprocess((arg) => {
-  if (typeof arg == "string" || arg instanceof Date) return new Date(arg);
-}, z.date());
-const parseObject = (val: unknown) =>
-  z.record(z.string(), z.unknown()).parse(val);
-const parseArray = (val: unknown) => z.array(z.unknown()).parse(val);
-const isDate = (val: unknown): val is Date => dateSchema.safeParse(val).success;
-const isString = (val: unknown): val is string => typeof val === "string";
-const isComponent = (val: unknown) => {
-  const res = z
-    .object({
-      id: z.string(),
-    })
-    .nullable()
-    .safeParse(val);
 
-  return res.success;
-};
-const isFile = (val: unknown) => {
-  const fileSchema = z.object({
-    name: z.string(),
-    alternativeText: z.string(),
-    caption: z.string(),
-    hash: z.string(),
-    ext: z.string(),
-    mime: z.string(),
-    size: z.number(),
-    width: z.number(),
-    height: z.number(),
-    url: z.string(),
-    formats: z.object({
-      thumbnail: z.object({
-        name: z.string(),
-        hash: z.string(),
-        ext: z.string(),
-        mime: z.string(),
-        width: z.number(),
-        height: z.number(),
-        size: z.number(),
-        url: z.string(),
-      }),
-      medium: z.object({
-        name: z.string(),
-        hash: z.string(),
-        ext: z.string(),
-        mime: z.string(),
-        width: z.number(),
-        height: z.number(),
-        size: z.number(),
-        url: z.string(),
-      }),
-      small: z.object({
-        name: z.string(),
-        hash: z.string(),
-        ext: z.string(),
-        mime: z.string(),
-        width: z.number(),
-        height: z.number(),
-        size: z.number(),
-        url: z.string(),
-      }),
-    }),
-    provider: z.string(),
-    // related: ["5fb5b2c74ed9430012005246"], TODO: what is this for?
-    createdAt: dateSchema,
-    updatedAt: dateSchema,
-    __v: z.number(),
-    id: z.string(),
+const getAvailableKeys = (jsonData: Record<string, unknown>) => {
+  // new Set<string>
+  const availableKeysMap: Record<string, Set<string>> = {};
+  Object.entries(jsonData).forEach(([entity, entityData]) => {
+    availableKeysMap[entity] = new Set<string>();
+    const dataPerEntity = parseArray(entityData);
+    if (!parseArray(dataPerEntity)) return;
+    dataPerEntity.forEach((entityObject) => {
+      const parsedEntityObject = parseObject(entityObject);
+      Object.keys(parsedEntityObject).forEach((availableKey) => {
+        availableKeysMap[entity].add(availableKey);
+      });
+    });
   });
-
-  return fileSchema.safeParse(val).success;
+  return availableKeysMap;
 };
 
-type ProcessedModel = {
-  entityName: string;
-  fileName: string;
-  url: string;
-  hint: string;
+const getFieldType = (value: unknown): StrapiTypes => {
+  if (isDate(value)) return StrapiTypes.Date;
+  if (isString(value) && isHTML(value)) return StrapiTypes.RichText;
+  if (isString(value)) return StrapiTypes.String;
+  if (isFile(value)) return StrapiTypes.Media;
+  if (isComponent(value)) return StrapiTypes.Component;
+  if (isNumber(value)) return StrapiTypes.Number;
+  if (isBoolean(value)) return StrapiTypes.Boolean;
+  if (isNullish(value)) return StrapiTypes.Nullish;
+  return StrapiTypes.Unknown;
 };
 
-enum StrapiTypes {
-  RichText = "richtext",
-  String = "string",
-  Date = "date",
-  Component = "component",
-  Relation = "relation",
-  Media = "media",
-}
-
-type Schema = {
-  [entity: string]: {
-    [field: string]: {
-      type: StrapiTypes;
-      required: boolean;
-      unique: boolean;
-    };
-  };
-};
 export const Processor = ({ jsonData }: Props) => {
   const [schema, setSchema] = useState<Schema>();
   const [processedModels, setProcessedModels] = useState<ProcessedModel[]>([]);
@@ -118,18 +66,7 @@ export const Processor = ({ jsonData }: Props) => {
     const formedSchema: Schema = {};
 
     // new Set<string>
-    const availableKeysMap: Record<string, Set<string>> = {};
-    Object.entries(jsonData).forEach(([entity, entityData]) => {
-      availableKeysMap[entity] = new Set<string>();
-      const dataPerEntity = parseArray(entityData);
-      if (!parseArray(dataPerEntity)) return;
-      dataPerEntity.forEach((entityObject) => {
-        const parsedEntityObject = parseObject(entityObject);
-        Object.keys(parsedEntityObject).forEach((availableKey) => {
-          availableKeysMap[entity].add(availableKey);
-        });
-      });
-    });
+    const availableKeysMap = getAvailableKeys(jsonData);
 
     Object.entries(availableKeysMap).forEach(([entity, fields]) => {
       const keyToTypeMap: Schema[string] = {};
@@ -147,51 +84,53 @@ export const Processor = ({ jsonData }: Props) => {
           // if it's missing available value
           if (!availableValue) isRequired = false;
 
-          if (isDate(availableValue)) {
-            keyToTypeMap[field] = {
-              type: StrapiTypes.Date,
-              required: isRequired,
-              unique: false,
-            };
-            return;
+          const fieldType = getFieldType(availableValue);
+
+          if (isString(availableValue) && uniqueValues.includes(availableValue))
+            isUniqueString = false;
+
+          keyToTypeMap[field] = {
+            type: fieldType,
+            required: isRequired,
+            unique: false,
+            subFields: keyToTypeMap[field]?.subFields,
+          };
+
+          // if it's a component it contains subfields
+          if (fieldType === StrapiTypes.Component && availableValue) {
+            const componentFields = parseObject(availableValue);
+            const subFields = Object.keys(componentFields);
+            subFields.forEach((subField) => {
+              if (reserverdFields.includes(subField)) return;
+
+              const subFieldType = getFieldType(componentFields[subField]);
+              if (!keyToTypeMap[field]?.subFields) {
+                keyToTypeMap[field].subFields = {};
+              }
+
+              keyToTypeMap[field].subFields = {
+                ...keyToTypeMap[field].subFields,
+                [subField]: {
+                  type: subFieldType,
+                  required: false,
+                  unique: false,
+                },
+              };
+            });
           }
 
-          if (
-            isString(availableValue) &&
-            keyToTypeMap[field]?.type !== StrapiTypes.RichText
-          ) {
-            if (uniqueValues.includes(availableValue)) isUniqueString = false;
-            keyToTypeMap[field] = {
-              type: isHTML(availableValue)
-                ? StrapiTypes.RichText
-                : StrapiTypes.String,
-              required: isRequired,
-              unique: isUniqueString,
-            };
+          if (fieldType === StrapiTypes.String && isString(availableValue)) {
+            keyToTypeMap[field].unique = isUniqueString;
             uniqueValues.push(availableValue);
-            return;
           }
 
-          if (isFile(availableValue)) {
-            keyToTypeMap[field] = {
-              type: StrapiTypes.Media,
-              required: isRequired,
-              unique: false,
-            };
-            return;
-          }
-
-          if (isComponent(availableValue)) {
-            keyToTypeMap[field] = {
-              type: StrapiTypes.Component,
-              required: isRequired,
-              unique: false,
-            };
-            return;
-          }
+          // TODO: worried about this
+          // isString(availableValue) &&
+          // keyToTypeMap[field]?.type !== StrapiTypes.RichText
         });
       });
 
+      console.log("******", keyToTypeMap);
       formedSchema[entity] = keyToTypeMap;
     });
 
@@ -319,6 +258,8 @@ export const Processor = ({ jsonData }: Props) => {
     handleFieldFlagToggle(args, "unique");
   };
 
+  const handleMapping = () => {};
+
   return (
     <div className="mt-8">
       <Button onClick={handleProcess} disabled={disabled}>
@@ -342,77 +283,37 @@ export const Processor = ({ jsonData }: Props) => {
                 <Text className="w-40 font-bold flex-shrink-0">Remove</Text>
               </div>
               <div className="flex flex-col gap-2">
-                {Object.entries(entitySchema).map(([field, fieldValue]) => (
-                  <div key={field} className="flex align-middle">
-                    <Text className="w-40">{field}</Text>
-                    <select
-                      value={fieldValue.type}
-                      className="bg-transparent font-bold text-white opacity-70 rounded-2 py-2 px-2 focus-visible:outline-0"
-                    >
-                      {Object.values(StrapiTypes).map((strapiType) => (
-                        <option
-                          key={strapiType}
-                          className="bg-bg-primary"
-                          id={strapiType}
-                          value={strapiType}
-                        >
-                          {strapiType}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="text"
-                      value={field}
-                      className="bg-black bg-opacity-30 w-40 font-bold text-white opacity-70 rounded-2 py-2 px-2 focus-visible:outline-0 ml-4 rounded-lg border border-transparent focus:border focus:border-gray-600"
-                      disabled
-                    />
-                    <div className="w-40 flex justify-center items-center">
-                      <input
-                        type="checkbox"
-                        onChange={(e) =>
-                          handleRequired({
-                            isChecked: e.currentTarget.checked,
-                            entity,
-                            field,
-                          })
-                        }
-                        checked={fieldValue.required}
-                        className="w-6 h-6"
-                        id={`${field}-required`}
-                        name={`${field}-required`}
-                        value={`${field}-required`}
-                      />
-                    </div>
-                    <div className="w-40 flex justify-center items-center">
-                      <input
-                        type="checkbox"
-                        onClick={(e) =>
-                          handleUnique({
-                            isChecked: e.currentTarget.checked,
-                            entity,
-                            field,
-                          })
-                        }
-                        checked={fieldValue.unique}
-                        className="w-6 h-6"
-                        id={`${field}-unique`}
-                        name={`${field}-unique`}
-                        value={`${field}-unique`}
-                      />
-                    </div>
-                    <RemoveIcon
-                      className="text-primary ml-4"
-                      onClick={() => handleFieldRemove(entity, field)}
-                    />
-                  </div>
-                ))}
+                <StrapiSchema
+                  schema={entitySchema}
+                  handleFieldRemove={({ field }) =>
+                    handleFieldRemove(entity, field)
+                  }
+                  handleRequired={(args) =>
+                    handleRequired({
+                      ...args,
+                      entity,
+                    })
+                  }
+                  handleUnique={(args) =>
+                    handleUnique({
+                      ...args,
+                      entity,
+                    })
+                  }
+                />
               </div>
             </div>
           ))}
         </>
       )}
 
-      <Button onClick={handleSchemaGeneration}>Generate models schema</Button>
+      {schema && (
+        <Button className="mt-4" onClick={handleSchemaGeneration}>
+          Generate models schema
+        </Button>
+      )}
+
+      <Subtitle>Generated Strapi Schemas</Subtitle>
 
       <ul className="list-outside list-disc">
         {processedModels.map((processedModel) => (
@@ -430,6 +331,12 @@ export const Processor = ({ jsonData }: Props) => {
           </li>
         ))}
       </ul>
+
+      {processedModels && <Subtitle className="mt-4">Mapping</Subtitle>}
+
+      <Button className="mt-4" onClick={handleMapping}>
+        Start Mapping
+      </Button>
     </div>
   );
 };
