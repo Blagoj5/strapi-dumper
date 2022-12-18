@@ -5,8 +5,6 @@ import axios from "axios";
 import Head from "next/head";
 import { ReactNode, useState } from "react";
 import JSONPretty from "react-json-pretty";
-import testData from "../src/features/processor/consts/testData.json";
-import testData2 from "../src/features/processor/consts/categories.json";
 import { AddIcon } from "../assets/AddIcon";
 import { DuplicateIcon } from "../assets/DuplicateIcon";
 import { RemoveIcon } from "../assets/RemoveIcon";
@@ -14,25 +12,10 @@ import Button from "../src/components/Button";
 import { Processor } from "../src/features/processor";
 import { Subtitle, Title } from "../src/components/Typography";
 import { downloadObjectAsJson } from "../src/utils/downloadObjectAsJson";
+import testData from "../src/features/processor/consts/testData.json";
+import { Input } from "../src/components/Input";
 
-const DEFAULT_STRAPI_ENDPOINT = "http://localhost:1337/dumps";
-
-const Input = ({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (newValue: string) => void;
-}) => {
-  return (
-    <input
-      type="text"
-      className="bg-card-input rounded-sm px-4 py-2 border-2 border-gray-600 w-[300px]"
-      value={value}
-      onChange={(e) => onChange(e.currentTarget.value)}
-    />
-  );
-};
+const DEFAULT_STRAPI_ENDPOINT = "http://localhost:1337";
 
 type Props = {
   title: string;
@@ -50,10 +33,7 @@ export default function Home() {
   const [endpoint, setEndpoint] = useState(DEFAULT_STRAPI_ENDPOINT);
   const [route, setRoute] = useState("example");
   const [routes, setRoutes] = useState<string[]>([]);
-  const [routesJsonMap, setRoutesJsonMap] = useState<Record<string, unknown>>({
-    athletes: testData,
-    categories: testData2,
-  });
+  const [routesJsonMap, setRoutesJsonMap] = useState<Record<string, unknown>>({});
 
   const onRouteAdd = () => {
     setRoutes([...routes, route]);

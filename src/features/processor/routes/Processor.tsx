@@ -3,10 +3,11 @@ import isHTML from "is-html";
 import React, { useState } from "react";
 import { RemoveIcon } from "../../../../assets/RemoveIcon";
 import Button from "../../../components/Button";
+import { Input } from "../../../components/Input";
 import { Subtitle, Text } from "../../../components/Typography";
 import { getUrlToJson } from "../../../utils/downloadObjectAsJson";
 import { StrapiSchema } from "../components/StrapiSchema";
-import { reserverdFields } from "../consts/reservedFields";
+import { reserverdFields, subReserveredFields } from "../consts/reservedFields";
 import {
   isBoolean,
   isComponent,
@@ -101,7 +102,7 @@ export const Processor = ({ jsonData }: Props) => {
             const componentFields = parseObject(availableValue);
             const subFields = Object.keys(componentFields);
             subFields.forEach((subField) => {
-              if (reserverdFields.includes(subField)) return;
+              if (subReserveredFields.includes(subField)) return;
 
               const subFieldType = getFieldType(componentFields[subField]);
               if (!keyToTypeMap[field]?.subFields) {
@@ -130,7 +131,6 @@ export const Processor = ({ jsonData }: Props) => {
         });
       });
 
-      console.log("******", keyToTypeMap);
       formedSchema[entity] = keyToTypeMap;
     });
 
@@ -170,28 +170,44 @@ export const Processor = ({ jsonData }: Props) => {
       const attributes: Record<string, any> = {};
       const components: Record<string, any>[] = [];
 
-      Object.entries(entityField).forEach(([field, fieldValue]) => {
-        attributes[field] = fieldValue;
+      Object.entries(entityField)
+        .filter(
+          ([field, fieldValue]) =>
+            ![StrapiTypes.Unknown, StrapiTypes.Nullish].includes(
+              fieldValue.type
+            ) && !reserverdFields.includes(field)
+        )
+        .forEach(([field, fieldValue]) => {
+          attributes[field] = { ...fieldValue };
 
-        if (fieldValue.type === StrapiTypes.Component) {
-          attributes[field].displayName = field;
-          attributes[field].repeatable = false; // TODO: add this option
-          attributes[field].component = `${field}.${field}`; // TODO: very imporant step for creation component schema, e.g socials.socials
-          components.push({
-            collectionName: `components_${attributes[field].component}`, // e.g components_socials_socials
-            info: {
-              displayName: attributes[field].displayName,
-            },
-            options: {},
-            attributes: {},
-          });
-        }
+          if (fieldValue.type === StrapiTypes.Component) {
+            delete attributes[field].subFields; // remove the previsouly spreaded subFields
+            attributes[field].displayName = field;
+            attributes[field].repeatable = false; // TODO: add this option
+            attributes[field].component = `${field}.${field}`; // TODO: very imporant step for creation component schema, e.g socials.socials
+            components.push({
+              collectionName: `components_${attributes[field].component}`, // e.g components_socials_socials
+              info: {
+                displayName: attributes[field].displayName,
+              },
+              options: {},
+              attributes: {},
+            });
 
-        if (fieldValue.type === StrapiTypes.Media) {
-          attributes[field].multiple = false; // TODO: add this option
-          attributes[field].allowedTypes = ["images"]; // TODO: handle this option
-        }
-      });
+            if (fieldValue.subFields) {
+              Object.entries(fieldValue.subFields).forEach(
+                ([subField, subFieldValue]) => {
+                  attributes[subField] = { ...subFieldValue };
+                }
+              );
+            }
+          }
+
+          if (fieldValue.type === StrapiTypes.Media) {
+            attributes[field].multiple = false; // TODO: add this option
+            attributes[field].allowedTypes = ["images"]; // TODO: handle this option
+          }
+        });
 
       formedSchema.attributes = attributes;
 
@@ -306,6 +322,15 @@ export const Processor = ({ jsonData }: Props) => {
           ))}
         </>
       )}
+
+      <div className="flex items-center gap-6 mt-4">
+        <Text> Reserverd Fields </Text>
+        <Input
+          value={reserverdFields.join(", ")}
+          onChange={() => {}}
+          disabled
+        />
+      </div>
 
       {schema && (
         <Button className="mt-4" onClick={handleSchemaGeneration}>
