@@ -320,17 +320,17 @@ export const Processor = ({ jsonData }: Props) => {
               </div>
             </div>
           ))}
+
+          <div className="flex items-center gap-6 mt-4">
+            <Text>Reserved Fields</Text>
+            <Input
+              value={reserverdFields.join(", ")}
+              onChange={() => {}}
+              disabled
+            />
+          </div>
         </>
       )}
-
-      <div className="flex items-center gap-6 mt-4">
-        <Text> Reserverd Fields </Text>
-        <Input
-          value={reserverdFields.join(", ")}
-          onChange={() => {}}
-          disabled
-        />
-      </div>
 
       {schema && (
         <Button className="mt-4" onClick={handleSchemaGeneration}>

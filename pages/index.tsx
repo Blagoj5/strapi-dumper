@@ -3,7 +3,7 @@ import "react-json-pretty/themes/monikai.css";
 /* eslint-disable react/react-in-jsx-scope */
 import axios from "axios";
 import Head from "next/head";
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import JSONPretty from "react-json-pretty";
 import { AddIcon } from "../assets/AddIcon";
 import { DuplicateIcon } from "../assets/DuplicateIcon";
@@ -12,8 +12,8 @@ import Button from "../src/components/Button";
 import { Processor } from "../src/features/processor";
 import { Subtitle, Title } from "../src/components/Typography";
 import { downloadObjectAsJson } from "../src/utils/downloadObjectAsJson";
-import testData from "../src/features/processor/consts/testData.json";
 import { Input } from "../src/components/Input";
+import { DUMPEY_KEY } from "../src/config";
 
 const DEFAULT_STRAPI_ENDPOINT = "http://localhost:1337";
 
@@ -30,27 +30,78 @@ const CardPane = ({ title, children }: Props) => {
   );
 };
 export default function Home() {
-  const [endpoint, setEndpoint] = useState(DEFAULT_STRAPI_ENDPOINT);
+  const [endpoint, setEndpoint] = useState<string>();
   const [route, setRoute] = useState("example");
-  const [routes, setRoutes] = useState<string[]>([]);
-  const [routesJsonMap, setRoutesJsonMap] = useState<Record<string, unknown>>({});
+  const [routes, setRoutes] = useState<string[]>();
+  // const [routesJsonMap, setRoutesJsonMap] = useState<Record<string, unknown>>({
+  //   athletes: testData,
+  // });
+  const [routesJsonMap, setRoutesJsonMap] = useState<Record<string, unknown>>(
+    {}
+  );
 
+  const loadConfig = () => {
+    const stringifiedConfig = localStorage.getItem(DUMPEY_KEY);
+    console.log("stringifiedConfig", stringifiedConfig);
+
+    if (stringifiedConfig) {
+      const config: {
+        endpoint: string;
+        routes: string[];
+      } = JSON.parse(stringifiedConfig);
+
+      setEndpoint(config.endpoint);
+      setRoutes(config.routes);
+    }
+  };
+
+  const persistConfig = () => {
+    console.log("endpoint", endpoint);
+    localStorage.setItem(
+      DUMPEY_KEY,
+      JSON.stringify({
+        endpoint,
+        routes,
+      })
+    );
+  };
+
+  useEffect(() => {
+    loadConfig();
+  }, []);
+
+  useEffect(() => {
+    if (!endpoint || !routes) return;
+
+    const listener = () => {
+      persistConfig();
+    };
+
+    window.addEventListener("beforeunload", listener);
+
+    console.log(endpoint);
+    return () => {
+      window.removeEventListener("beforeunload", listener);
+    };
+  }, [routes, endpoint]);
+
+  console.log("***", endpoint);
   const onRouteAdd = () => {
-    setRoutes([...routes, route]);
+    setRoutes([...(routes || []), route]);
   };
 
   const onRouteRemove = (routeToRemove: string) => {
     setRoutes(
-      routes.filter((existingRoute) => existingRoute !== routeToRemove)
+      routes?.filter((existingRoute) => existingRoute !== routeToRemove)
     );
   };
 
   const dumpStrapi = async () => {
     setRoutesJsonMap({});
+    if (!routes) return;
     await Promise.all(
-      routes.map(async (route) => {
+      routes?.map(async (route) => {
         const data = await axios.get(`${endpoint}/${route}`);
-        console.log("***", data);
         setRoutesJsonMap((oldRoutesJson) => ({
           ...oldRoutesJson,
           [route]: data.data,
@@ -69,7 +120,10 @@ export default function Home() {
 
       <main className="max-w-[1200px] mx-auto text-white bg-card px-20 py-14 rounded-md">
         <CardPane title="Add Strapi endpoint">
-          <Input value={endpoint} onChange={setEndpoint} />
+          <Input
+            value={endpoint ?? DEFAULT_STRAPI_ENDPOINT}
+            onChange={setEndpoint}
+          />
         </CardPane>
 
         <CardPane title="Endpoints">
@@ -79,14 +133,14 @@ export default function Home() {
               type="button"
               className="disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={onRouteAdd}
-              disabled={routes.includes(route)}
+              disabled={routes?.includes(route)}
             >
               <AddIcon />
             </button>
           </div>
           <h4 className="text-xl mt-4">Routes</h4>
           <ul className="mt-2">
-            {routes.map((route) => (
+            {routes?.map((route) => (
               <li key={route} className="flex">
                 <p className="bg-card-input border border-gray-600 mb-2 p-2 w-[300px]">{`/${route}`}</p>
                 <button
@@ -101,7 +155,7 @@ export default function Home() {
           </ul>
         </CardPane>
 
-        <Button disabled={routes.length === 0} onClick={dumpStrapi}>
+        <Button disabled={routes?.length === 0} onClick={dumpStrapi}>
           Generate JSON
         </Button>
 
