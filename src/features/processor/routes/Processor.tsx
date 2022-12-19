@@ -1,3 +1,4 @@
+import axios from "axios";
 import clsx from "clsx";
 import isHTML from "is-html";
 import React, { useState } from "react";
@@ -6,6 +7,7 @@ import Button from "../../../components/Button";
 import { Input } from "../../../components/Input";
 import { Subtitle, Text } from "../../../components/Typography";
 import { getUrlToJson } from "../../../utils/downloadObjectAsJson";
+import { StaticStrapiSchema } from "../components/StaticStrapiSchema";
 import { StrapiSchema } from "../components/StrapiSchema";
 import { reserverdFields, subReserveredFields } from "../consts/reservedFields";
 import {
@@ -274,7 +276,64 @@ export const Processor = ({ jsonData }: Props) => {
     handleFieldFlagToggle(args, "unique");
   };
 
-  const handleMapping = () => {};
+  const handleMapping = () => {
+    if (!schema) return;
+
+    const entities = Object.keys(schema);
+    const findFieldsByType = () => {
+      const fieldsMap: Record<
+        string,
+        { booleanFields: string[]; stringFields: string[] }
+      > = {};
+      entities.forEach((entity) => {
+        const fields = Object.keys(schema?.[entity]);
+        fieldsMap[entity] = { booleanFields: [], stringFields: [] };
+        fields
+          .filter((field) => !reserverdFields.includes(field))
+          .forEach((field) => {
+            const fieldType = schema?.[entity][field].type;
+            if (
+              fieldType === StrapiTypes.String ||
+              fieldType === StrapiTypes.RichText
+            )
+              fieldsMap[entity].stringFields.push(field);
+            if (fieldType === StrapiTypes.Boolean)
+              fieldsMap[entity].booleanFields.push(field);
+          });
+      });
+
+      return fieldsMap;
+    };
+
+    const fieldsMap = findFieldsByType();
+    entities.forEach((entity) => {
+      const { stringFields, booleanFields } = fieldsMap[entity];
+      const dataPerEntity = parseArray(jsonData[entity]);
+
+      dataPerEntity.forEach((entityObject) => {
+        const strapiData = new FormData();
+        const data: Record<string, unknown> = {};
+        const parsedEntityObject = parseObject(entityObject);
+
+        stringFields.forEach((stringField) => {
+          const stringValue = parsedEntityObject[stringField];
+          if (isString(stringValue)) data[stringField] = stringValue;
+        });
+
+        booleanFields.forEach((booleanField) => {
+          const booleanValue = parsedEntityObject[booleanField];
+          if (isBoolean(booleanValue))
+            data[booleanField] = String(booleanValue);
+        });
+
+        // strapiData.set("data", JSON.stringify(data));
+        // TODO: test
+        axios.post("http://localhost:1337/api/categories", {
+          data,
+        });
+      });
+    });
+  };
 
   return (
     <div className="mt-8">
@@ -298,26 +357,29 @@ export const Processor = ({ jsonData }: Props) => {
                 <Text className="w-40 font-bold flex-shrink-0">Unique</Text>
                 <Text className="w-40 font-bold flex-shrink-0">Remove</Text>
               </div>
+
               <div className="flex flex-col gap-2">
-                <StrapiSchema
-                  schema={entitySchema}
-                  handleFieldRemove={({ field }) =>
-                    handleFieldRemove(entity, field)
-                  }
-                  handleRequired={(args) =>
-                    handleRequired({
-                      ...args,
-                      entity,
-                    })
-                  }
-                  handleUnique={(args) =>
-                    handleUnique({
-                      ...args,
-                      entity,
-                    })
-                  }
-                />
+                <StaticStrapiSchema schema={entitySchema} />
               </div>
+
+              <StrapiSchema
+                schema={entitySchema}
+                handleFieldRemove={({ field }) =>
+                  handleFieldRemove(entity, field)
+                }
+                handleRequired={(args) =>
+                  handleRequired({
+                    ...args,
+                    entity,
+                  })
+                }
+                handleUnique={(args) =>
+                  handleUnique({
+                    ...args,
+                    entity,
+                  })
+                }
+              />
             </div>
           ))}
 

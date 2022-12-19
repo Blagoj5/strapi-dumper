@@ -123,12 +123,17 @@ export default function Home() {
           <Input
             value={endpoint ?? DEFAULT_STRAPI_ENDPOINT}
             onChange={setEndpoint}
+            className="bg-card-input rounded-sm px-4 py-2 border-2 border-gray-600 w-[300px]"
           />
         </CardPane>
 
         <CardPane title="Endpoints">
           <div className="flex align-middle gap-2">
-            <Input value={route} onChange={setRoute} />
+            <Input
+              className="bg-card-input rounded-sm px-4 py-2 border-2 border-gray-600 w-[300px]"
+              value={route}
+              onChange={setRoute}
+            />
             <button
               type="button"
               className="disabled:opacity-50 disabled:cursor-not-allowed"
