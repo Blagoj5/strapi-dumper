@@ -3,7 +3,7 @@ import "react-json-pretty/themes/monikai.css";
 /* eslint-disable react/react-in-jsx-scope */
 import axios from "axios";
 import Head from "next/head";
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useState } from "react";
 import JSONPretty from "react-json-pretty";
 import { AddIcon } from "../assets/AddIcon";
 import { DuplicateIcon } from "../assets/DuplicateIcon";
@@ -13,7 +13,7 @@ import { Processor } from "../src/features/processor";
 import { Subtitle, Title } from "../src/components/Typography";
 import { downloadObjectAsJson } from "../src/utils/downloadObjectAsJson";
 import { Input } from "../src/components/Input";
-import { DUMPEY_KEY } from "../src/config";
+import { useLoadconfig } from "../src/hooks/useLoadConfig";
 
 const DEFAULT_STRAPI_ENDPOINT = "http://localhost:1337";
 
@@ -30,70 +30,24 @@ const CardPane = ({ title, children }: Props) => {
   );
 };
 export default function Home() {
-  const [endpoint, setEndpoint] = useState<string>();
   const [route, setRoute] = useState("example");
-  const [routes, setRoutes] = useState<string[]>();
-  // const [routesJsonMap, setRoutesJsonMap] = useState<Record<string, unknown>>({
-  //   athletes: testData,
-  // });
+  const { endpoint, routes, setConfig } = useLoadconfig();
   const [routesJsonMap, setRoutesJsonMap] = useState<Record<string, unknown>>(
     {}
   );
 
-  const loadConfig = () => {
-    const stringifiedConfig = localStorage.getItem(DUMPEY_KEY);
-    console.log("stringifiedConfig", stringifiedConfig);
-
-    if (stringifiedConfig) {
-      const config: {
-        endpoint: string;
-        routes: string[];
-      } = JSON.parse(stringifiedConfig);
-
-      setEndpoint(config.endpoint);
-      setRoutes(config.routes);
-    }
-  };
-
-  const persistConfig = () => {
-    console.log("endpoint", endpoint);
-    localStorage.setItem(
-      DUMPEY_KEY,
-      JSON.stringify({
-        endpoint,
-        routes,
-      })
-    );
-  };
-
-  useEffect(() => {
-    loadConfig();
-  }, []);
-
-  useEffect(() => {
-    if (!endpoint || !routes) return;
-
-    const listener = () => {
-      persistConfig();
-    };
-
-    window.addEventListener("beforeunload", listener);
-
-    console.log(endpoint);
-    return () => {
-      window.removeEventListener("beforeunload", listener);
-    };
-  }, [routes, endpoint]);
-
-  console.log("***", endpoint);
   const onRouteAdd = () => {
-    setRoutes([...(routes || []), route]);
+    if (endpoint) setConfig({ endpoint, routes: [...(routes ?? []), route] });
   };
 
   const onRouteRemove = (routeToRemove: string) => {
-    setRoutes(
-      routes?.filter((existingRoute) => existingRoute !== routeToRemove)
-    );
+    if (endpoint)
+      setConfig({
+        endpoint,
+        routes:
+          routes?.filter((existingRoute) => existingRoute !== routeToRemove) ??
+          [],
+      });
   };
 
   const dumpStrapi = async () => {
@@ -122,7 +76,9 @@ export default function Home() {
         <CardPane title="Add Strapi endpoint">
           <Input
             value={endpoint ?? DEFAULT_STRAPI_ENDPOINT}
-            onChange={setEndpoint}
+            onChange={(value) =>
+              setConfig({ routes: routes ?? [], endpoint: value })
+            }
             className="bg-card-input rounded-sm px-4 py-2 border-2 border-gray-600 w-[300px]"
           />
         </CardPane>
