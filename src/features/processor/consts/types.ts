@@ -36,7 +36,7 @@ export const isComponent = (val: unknown) => {
   return res.success;
 };
 
-export const isFile = (val: unknown) => {
+export const parseFile = (val: unknown) => {
   const fileSchema = z.object({
     name: z.string(),
     alternativeText: z.string(),
@@ -92,7 +92,18 @@ export const isFile = (val: unknown) => {
     id: z.string(),
   });
 
-  return fileSchema.safeParse(val).success;
+  const result = fileSchema.safeParse(val);
+
+  if (result.success) {
+    return result.data;
+  }
+
+  return result.success;
+};
+
+export const isFile = (val: unknown) => {
+  const res = parseFile(val);
+  return !!res;
 };
 
 export type ProcessedModel = {

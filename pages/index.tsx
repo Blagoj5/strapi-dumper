@@ -15,8 +15,6 @@ import { downloadObjectAsJson } from "../src/utils/downloadObjectAsJson";
 import { Input } from "../src/components/Input";
 import { useLoadconfig } from "../src/hooks/useLoadConfig";
 
-const DEFAULT_STRAPI_ENDPOINT = "http://localhost:1337";
-
 type Props = {
   title: string;
   children: ReactNode;
@@ -31,23 +29,21 @@ const CardPane = ({ title, children }: Props) => {
 };
 export default function Home() {
   const [route, setRoute] = useState("example");
-  const { endpoint, routes, setConfig } = useLoadconfig();
+  const { endpoint, migrationEndpoint, routes, setConfig } = useLoadconfig();
   const [routesJsonMap, setRoutesJsonMap] = useState<Record<string, unknown>>(
     {}
   );
 
   const onRouteAdd = () => {
-    if (endpoint) setConfig({ endpoint, routes: [...(routes ?? []), route] });
+    setConfig({ routes: [...(routes ?? []), route] });
   };
 
   const onRouteRemove = (routeToRemove: string) => {
-    if (endpoint)
-      setConfig({
-        endpoint,
-        routes:
-          routes?.filter((existingRoute) => existingRoute !== routeToRemove) ??
-          [],
-      });
+    setConfig({
+      routes:
+        routes?.filter((existingRoute) => existingRoute !== routeToRemove) ??
+        [],
+    });
   };
 
   const dumpStrapi = async () => {
@@ -75,10 +71,16 @@ export default function Home() {
       <main className="max-w-[1200px] mx-auto text-white bg-card px-20 py-14 rounded-md">
         <CardPane title="Add Strapi endpoint">
           <Input
-            value={endpoint ?? DEFAULT_STRAPI_ENDPOINT}
-            onChange={(value) =>
-              setConfig({ routes: routes ?? [], endpoint: value })
-            }
+            value={endpoint}
+            onChange={(value) => setConfig({ endpoint: value })}
+            className="bg-card-input rounded-sm px-4 py-2 border-2 border-gray-600 w-[300px]"
+          />
+        </CardPane>
+
+        <CardPane title="Add Strapi Migration endpoint">
+          <Input
+            value={migrationEndpoint}
+            onChange={(value) => setConfig({ migrationEndpoint: value })}
             className="bg-card-input rounded-sm px-4 py-2 border-2 border-gray-600 w-[300px]"
           />
         </CardPane>
