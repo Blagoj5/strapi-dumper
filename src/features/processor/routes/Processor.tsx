@@ -1,6 +1,7 @@
 import axios from "axios";
 import isHTML from "is-html";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
+import JSONPretty from "react-json-pretty";
 import Button from "../../../components/Button";
 import { Input } from "../../../components/Input";
 import { Subtitle, Text } from "../../../components/Typography";
@@ -10,7 +11,7 @@ import { StaticStrapiSchema } from "../components/StaticStrapiSchema";
 import { StrapiSchema } from "../components/StrapiSchema";
 import { reserverdFields, subReserveredFields } from "../consts/reservedFields";
 import {
-    Field,
+  Field,
   isBoolean,
   isComponent,
   isDate,
@@ -48,14 +49,22 @@ const getAvailableKeys = (jsonData: Record<string, unknown>) => {
   return availableKeysMap;
 };
 
-const getFieldType = (value: unknown, keyMap: Field | undefined): StrapiTypes => {
+const getFieldType = (
+  value: unknown,
+  keyMap: Field | undefined
+): StrapiTypes => {
   if (isDate(value)) return StrapiTypes.Date;
   // it was previously a rich text, but right now it's a string (it does not contain html)
-  if (isString(value) && isHTML(value) || keyMap?.type === StrapiTypes.RichText) return StrapiTypes.RichText;
+  if (
+    (isString(value) && isHTML(value)) ||
+    keyMap?.type === StrapiTypes.RichText
+  )
+    return StrapiTypes.RichText;
   if (isString(value)) return StrapiTypes.String;
   if (isFile(value)) return StrapiTypes.Media;
   // if the previous type was component even tho it's null it's still of type component but not required
-  if (isComponent(value) || keyMap?.type === StrapiTypes.Component) return StrapiTypes.Component;
+  if (isComponent(value) || keyMap?.type === StrapiTypes.Component)
+    return StrapiTypes.Component;
   if (isNumber(value)) return StrapiTypes.Number;
   if (isBoolean(value)) return StrapiTypes.Boolean;
   if (isNullish(value)) return StrapiTypes.Nullish;
@@ -64,6 +73,9 @@ const getFieldType = (value: unknown, keyMap: Field | undefined): StrapiTypes =>
 
 export const Processor = ({ jsonData }: Props) => {
   const [schema, setSchema] = useState<Schema>();
+  const [strapiMapData, setStrapiMapData] = useState<{
+    [entity: string]: FormData[];
+  }>({});
   const [processedModels, setProcessedModels] = useState<ProcessedModel[]>([]);
   const { migrationEndpoint, endpoint } = useLoadconfig();
 
@@ -72,7 +84,7 @@ export const Processor = ({ jsonData }: Props) => {
   const disabled = Object.keys(jsonData).length === 0;
   const showProcessed = !disabled;
 
-  const handleProcess = () => {
+  const handleProcess = async () => {
     const formedSchema: Schema = {};
 
     // new Set<string>
@@ -113,7 +125,10 @@ export const Processor = ({ jsonData }: Props) => {
             subFields.forEach((subField) => {
               if (subReserveredFields.includes(subField)) return;
 
-              const subFieldType = getFieldType(componentFields[subField], keyToTypeMap[field].subFields?.[subField]);
+              const subFieldType = getFieldType(
+                componentFields[subField],
+                keyToTypeMap[field].subFields?.[subField]
+              );
               if (!keyToTypeMap[field]?.subFields) {
                 keyToTypeMap[field].subFields = {};
               }
@@ -144,6 +159,110 @@ export const Processor = ({ jsonData }: Props) => {
     });
 
     setSchema(formedSchema);
+
+    if (!formedSchema) return;
+
+    const entities = Object.keys(formedSchema);
+    const findFieldsByType = () => {
+      const fieldsMap: Record<
+        string,
+        {
+          booleanFields: string[];
+          stringFields: string[];
+          mediaFields: string[];
+          componentFields: string[];
+        }
+      > = {};
+      entities.forEach((entity) => {
+        const fields = Object.keys(formedSchema?.[entity]);
+        fieldsMap[entity] = {
+          booleanFields: [],
+          stringFields: [],
+          mediaFields: [],
+          componentFields: [],
+        };
+        fields
+          .filter((field) => !reserverdFields.includes(field))
+          .forEach((field) => {
+            const fieldType = formedSchema?.[entity][field].type;
+            switch (fieldType) {
+              case StrapiTypes.String:
+              case StrapiTypes.RichText:
+                fieldsMap[entity].stringFields.push(field);
+                break;
+              case StrapiTypes.Boolean:
+                fieldsMap[entity].booleanFields.push(field);
+                break;
+              case StrapiTypes.Media:
+                fieldsMap[entity].mediaFields.push(field);
+                break;
+              case StrapiTypes.Component:
+                fieldsMap[entity].componentFields.push(field);
+                break;
+              default:
+                break;
+            }
+          });
+      });
+
+      return fieldsMap;
+    };
+
+    const fieldsMap = findFieldsByType();
+    for (const entity of entities) {
+      const { stringFields, booleanFields, mediaFields, componentFields } =
+        fieldsMap[entity];
+      const dataPerEntity = parseArray(jsonData[entity]);
+
+      for (const entityObject of dataPerEntity) {
+        const strapiData = new FormData();
+        const data: Record<string, unknown> = {};
+        const parsedEntityObject = parseObject(entityObject);
+
+        stringFields.forEach((stringField) => {
+          const stringValue = parsedEntityObject[stringField];
+          if (isString(stringValue)) data[stringField] = stringValue;
+        });
+
+        booleanFields.forEach((booleanField) => {
+          const booleanValue = parsedEntityObject[booleanField];
+          if (isBoolean(booleanValue))
+            data[booleanField] = String(booleanValue);
+        });
+
+        componentFields.forEach((componentField) => {
+          const componentValue = parsedEntityObject[componentField];
+          const component = parseComponent(componentValue);
+          if (!component) return;
+          // component: {id: string, _id: string, facebook: string}
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { _id, id, ...restData } = component;
+          // restData: {facebook: string}
+          Object.entries(restData).forEach(([field, value]) => {
+            data[field] = value;
+          });
+        });
+
+        const mediaPromises = mediaFields.map(async (mediaField) => {
+          const mediaValue = parsedEntityObject[mediaField];
+          const media = parseFile(mediaValue);
+          if (!media) return;
+          const file = await fetch(`${endpoint}${media.url}`);
+          const blob = await file.blob();
+          strapiData.append(`files.${mediaField}`, blob, media.name);
+        });
+
+        await Promise.all(mediaPromises);
+
+        strapiData.append("data", JSON.stringify(data));
+        setStrapiMapData((prevState) => ({
+          ...prevState,
+          [entity]: prevState?.[entity]
+            ? [...prevState[entity], strapiData]
+            : [strapiData],
+        }));
+      }
+    }
   };
 
   const handleFieldRemove = (entity: string, field: string) => {
@@ -286,103 +405,10 @@ export const Processor = ({ jsonData }: Props) => {
   const handleMapping = async () => {
     setIsLoading(true);
     try {
-      if (!schema) return;
-
-      const entities = Object.keys(schema);
-      const findFieldsByType = () => {
-        const fieldsMap: Record<
-          string,
-          {
-            booleanFields: string[];
-            stringFields: string[];
-            mediaFields: string[];
-            componentFields: string[];
-          }
-        > = {};
-        entities.forEach((entity) => {
-          const fields = Object.keys(schema?.[entity]);
-          fieldsMap[entity] = {
-            booleanFields: [],
-            stringFields: [],
-            mediaFields: [],
-            componentFields: [],
-          };
-          fields
-            .filter((field) => !reserverdFields.includes(field))
-            .forEach((field) => {
-              const fieldType = schema?.[entity][field].type;
-              switch (fieldType) {
-                case StrapiTypes.String:
-                case StrapiTypes.RichText:
-                  fieldsMap[entity].stringFields.push(field);
-                  break;
-                case StrapiTypes.Boolean:
-                  fieldsMap[entity].booleanFields.push(field);
-                  break;
-                case StrapiTypes.Media:
-                  fieldsMap[entity].mediaFields.push(field);
-                  break;
-                case StrapiTypes.Component:
-                  fieldsMap[entity].componentFields.push(field);
-                  break;
-                default:
-                  break;
-              }
-            });
-        });
-
-        return fieldsMap;
-      };
-
-      const fieldsMap = findFieldsByType();
-      for (const entity of entities) {
-        const { stringFields, booleanFields, mediaFields, componentFields } =
-          fieldsMap[entity];
-        const dataPerEntity = parseArray(jsonData[entity]);
-
-        for (const entityObject of dataPerEntity) {
-          const strapiData = new FormData();
-          const data: Record<string, unknown> = {};
-          const parsedEntityObject = parseObject(entityObject);
-
-          stringFields.forEach((stringField) => {
-            const stringValue = parsedEntityObject[stringField];
-            if (isString(stringValue)) data[stringField] = stringValue;
-          });
-
-          booleanFields.forEach((booleanField) => {
-            const booleanValue = parsedEntityObject[booleanField];
-            if (isBoolean(booleanValue))
-              data[booleanField] = String(booleanValue);
-          });
-
-          componentFields.forEach((componentField) => {
-            const componentValue = parsedEntityObject[componentField];
-            const component = parseComponent(componentValue);
-            if (!component) return;
-            // component: {id: string, _id: string, facebook: string}
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { _id, id, ...restData } = component;
-            // restData: {facebook: string}
-            Object.entries(restData).forEach(([field, value]) => {
-              data[field] = value;
-            });
-          });
-
-          const mediaPromises = mediaFields.map(async (mediaField) => {
-            const mediaValue = parsedEntityObject[mediaField];
-            const media = parseFile(mediaValue);
-            if (!media) return;
-            const blob = await fetch(`${endpoint}${media.url}`).then((r) =>
-              r.blob()
-            );
-            strapiData.append(`files.${mediaField}`, blob, media.name);
-          });
-
-          await Promise.all(mediaPromises);
-
-          strapiData.append("data", JSON.stringify(data));
-          await axios.post(`${migrationEndpoint}/api/${entity}`, strapiData);
+      const entitiesData = Object.entries(strapiMapData);
+      for (const [entity, strapiData] of entitiesData) {
+        for (const data of strapiData) {
+          await axios.post(`${migrationEndpoint}/api/${entity}`, data);
         }
       }
     } finally {
@@ -390,6 +416,31 @@ export const Processor = ({ jsonData }: Props) => {
     }
   };
 
+  const strapiMultiData = useMemo(() => {
+    const strapiDataEntities: {
+      strapiData: Record<string, any>;
+      entity: string;
+    }[] = [];
+    const entities = Object.keys(strapiMapData);
+    entities.forEach((entity) => {
+      const newStrapiMap: Record<string, any>[] = strapiMapData[entity].map(
+        (strapiData) => {
+          const object: Record<string, any> = {};
+          console.log("here");
+          strapiData.forEach(function (value, key) {
+            try {
+              object[key] = JSON.parse(value.toString());
+            } catch (error) {
+              object[key] = value.toString();
+            }
+          });
+          return object;
+        }
+      );
+      strapiDataEntities.push({ entity, strapiData: newStrapiMap });
+    });
+    return strapiDataEntities;
+  }, [strapiMapData]);
   return (
     <div className="mt-8">
       <Button onClick={handleProcess} disabled={disabled}>
@@ -475,6 +526,17 @@ export const Processor = ({ jsonData }: Props) => {
       </ul>
 
       {processedModels && <Subtitle className="mt-4">Mapping</Subtitle>}
+
+      {strapiMultiData.map((data) => (
+        <>
+          <Text>{data.entity}</Text>
+          <JSONPretty
+            className="w-full overflow-scroll no-scrollbar max-h-[300px]"
+            themeClassName="__json-pretty__ no-scrollbar"
+            data={data.strapiData}
+          />
+        </>
+      ))}
 
       <Button className="mt-4" onClick={handleMapping} isLoading={isLoading}>
         Start Mapping
