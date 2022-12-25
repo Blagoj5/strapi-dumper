@@ -25,15 +25,22 @@ export const isNullish = (val: unknown) => {
   return typeof val === "undefined" || val === null;
 };
 
-export const isComponent = (val: unknown) => {
+export const parseComponent = (val: unknown) => {
   const res = z
     .object({
       id: z.string(),
+      _id: z.string().optional(),
     })
-    .nullable()
+    .passthrough()
     .safeParse(val);
 
-  return res.success;
+  if (res.success) return res.data;
+  return false
+};
+export const isComponent = (val: unknown) => {
+  const res = parseComponent(val);
+
+  return !!res;
 };
 
 export const parseFile = (val: unknown) => {
@@ -126,7 +133,7 @@ export enum StrapiTypes {
   Unknown = "unknown",
 }
 
-type Field = {
+export type Field = {
   type: StrapiTypes;
   required: boolean;
   unique: boolean;

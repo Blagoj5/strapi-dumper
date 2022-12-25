@@ -10,6 +10,7 @@ import { StaticStrapiSchema } from "../components/StaticStrapiSchema";
 import { StrapiSchema } from "../components/StrapiSchema";
 import { reserverdFields, subReserveredFields } from "../consts/reservedFields";
 import {
+    Field,
   isBoolean,
   isComponent,
   isDate,
@@ -18,6 +19,7 @@ import {
   isNumber,
   isString,
   parseArray,
+  parseComponent,
   parseFile,
   parseObject,
   ProcessedModel,
@@ -46,12 +48,14 @@ const getAvailableKeys = (jsonData: Record<string, unknown>) => {
   return availableKeysMap;
 };
 
-const getFieldType = (value: unknown): StrapiTypes => {
+const getFieldType = (value: unknown, keyMap: Field | undefined): StrapiTypes => {
   if (isDate(value)) return StrapiTypes.Date;
-  if (isString(value) && isHTML(value)) return StrapiTypes.RichText;
+  // it was previously a rich text, but right now it's a string (it does not contain html)
+  if (isString(value) && isHTML(value) || keyMap?.type === StrapiTypes.RichText) return StrapiTypes.RichText;
   if (isString(value)) return StrapiTypes.String;
   if (isFile(value)) return StrapiTypes.Media;
-  if (isComponent(value)) return StrapiTypes.Component;
+  // if the previous type was component even tho it's null it's still of type component but not required
+  if (isComponent(value) || keyMap?.type === StrapiTypes.Component) return StrapiTypes.Component;
   if (isNumber(value)) return StrapiTypes.Number;
   if (isBoolean(value)) return StrapiTypes.Boolean;
   if (isNullish(value)) return StrapiTypes.Nullish;
@@ -90,7 +94,7 @@ export const Processor = ({ jsonData }: Props) => {
           // if it's missing available value
           if (!availableValue) isRequired = false;
 
-          const fieldType = getFieldType(availableValue);
+          const fieldType = getFieldType(availableValue, keyToTypeMap[field]);
 
           if (isString(availableValue) && uniqueValues.includes(availableValue))
             isUniqueString = false;
@@ -109,7 +113,7 @@ export const Processor = ({ jsonData }: Props) => {
             subFields.forEach((subField) => {
               if (subReserveredFields.includes(subField)) return;
 
-              const subFieldType = getFieldType(componentFields[subField]);
+              const subFieldType = getFieldType(componentFields[subField], keyToTypeMap[field].subFields?.[subField]);
               if (!keyToTypeMap[field]?.subFields) {
                 keyToTypeMap[field].subFields = {};
               }
@@ -292,6 +296,7 @@ export const Processor = ({ jsonData }: Props) => {
             booleanFields: string[];
             stringFields: string[];
             mediaFields: string[];
+            componentFields: string[];
           }
         > = {};
         entities.forEach((entity) => {
@@ -300,6 +305,7 @@ export const Processor = ({ jsonData }: Props) => {
             booleanFields: [],
             stringFields: [],
             mediaFields: [],
+            componentFields: [],
           };
           fields
             .filter((field) => !reserverdFields.includes(field))
@@ -316,6 +322,9 @@ export const Processor = ({ jsonData }: Props) => {
                 case StrapiTypes.Media:
                   fieldsMap[entity].mediaFields.push(field);
                   break;
+                case StrapiTypes.Component:
+                  fieldsMap[entity].componentFields.push(field);
+                  break;
                 default:
                   break;
               }
@@ -327,7 +336,8 @@ export const Processor = ({ jsonData }: Props) => {
 
       const fieldsMap = findFieldsByType();
       for (const entity of entities) {
-        const { stringFields, booleanFields, mediaFields } = fieldsMap[entity];
+        const { stringFields, booleanFields, mediaFields, componentFields } =
+          fieldsMap[entity];
         const dataPerEntity = parseArray(jsonData[entity]);
 
         for (const entityObject of dataPerEntity) {
@@ -344,6 +354,19 @@ export const Processor = ({ jsonData }: Props) => {
             const booleanValue = parsedEntityObject[booleanField];
             if (isBoolean(booleanValue))
               data[booleanField] = String(booleanValue);
+          });
+
+          componentFields.forEach((componentField) => {
+            const componentValue = parsedEntityObject[componentField];
+            const component = parseComponent(componentValue);
+            if (!component) return;
+            // component: {id: string, _id: string, facebook: string}
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { _id, id, ...restData } = component;
+            // restData: {facebook: string}
+            Object.entries(restData).forEach(([field, value]) => {
+              data[field] = value;
+            });
           });
 
           const mediaPromises = mediaFields.map(async (mediaField) => {
