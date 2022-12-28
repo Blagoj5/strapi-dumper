@@ -1,6 +1,7 @@
 import axios from "axios";
 import React, { useMemo, useState } from "react";
 import JSONPretty from "react-json-pretty";
+import { useImmer } from "use-immer";
 import Button from "../../../components/Button";
 import { Input } from "../../../components/Input";
 import { Subtitle, Text } from "../../../components/Typography";
@@ -10,6 +11,7 @@ import { StaticStrapiSchema } from "../components/StaticStrapiSchema";
 import { StrapiSchema } from "../components/StrapiSchema";
 import { reserverdFields } from "../consts/reservedFields";
 import {
+  Field,
   isBoolean,
   isString,
   parseArray,
@@ -28,7 +30,7 @@ type Props = {
 };
 
 export const Processor = ({ jsonData }: Props) => {
-  const [schema, setSchema] = useState<Schema>();
+  const [schema, setSchema] = useImmer<Schema | undefined>(undefined);
   const [strapiMapData, setStrapiMapData] = useState<{
     [entity: string]: FormData[];
   }>({});
@@ -283,15 +285,8 @@ export const Processor = ({ jsonData }: Props) => {
     const entityValue = schema?.[entity];
     const fieldValue = entityValue?.[field];
     if (!fieldValue || !entityValue) return;
-    setSchema({
-      ...schema,
-      [entity]: {
-        ...entityValue,
-        [field]: {
-          ...fieldValue,
-          [flagField]: isChecked,
-        },
-      },
+    setSchema((stateSchema) => {
+      if (stateSchema) stateSchema[entity][field][flagField] = isChecked;
     });
   };
 
@@ -303,11 +298,29 @@ export const Processor = ({ jsonData }: Props) => {
     handleFieldFlagToggle(args, "required");
   };
 
-  const handleStrapiTypeChange = (entity: string, field: string, newStrapiType?: StrapiType) => {
+  const handleStrapiTypeChange = (
+    entity: string,
+    field: string,
+    newStrapiType?: StrapiType
+  ) => {
     switch (newStrapiType) {
-      case StrapiType.RelationOneToOne:
-        console.log("Major switch");
+      case StrapiType.RelationOneToOne: {
+        const fieldInfo = schema?.[entity]?.[field];
+        if (!fieldInfo) throw new Error("Field info doesn't exist");
+        const newFieldInfo: Field = {
+          type: newStrapiType,
+          subFields: {},
+          required: false,
+          unique: false,
+        };
+        setSchema((stateSchema) => {
+          if (stateSchema) stateSchema[entity][field] = newFieldInfo;
+        });
+
+        // I need to use this to update JSON previewer
+        // setStrapiMapData((prevState) => ({
         break;
+      }
 
       default:
         break;
@@ -404,7 +417,9 @@ export const Processor = ({ jsonData }: Props) => {
                     entity,
                   })
                 }
-                onStrapiTypeChange={(...args) => handleStrapiTypeChange(entity, ...args)}
+                onStrapiTypeChange={(...args) =>
+                  handleStrapiTypeChange(entity, ...args)
+                }
               />
             </div>
           ))}
