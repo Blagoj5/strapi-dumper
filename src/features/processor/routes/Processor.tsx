@@ -317,13 +317,31 @@ export const Processor = ({ jsonData }: Props) => {
 
         setStrapiMapData((strapiMap) => {
           strapiMap[entity] = strapiMap[entity].map((formData) => {
-            formData.set(field, JSON.stringify({ id: "REPLACE WITH ACTUAL ID" }));
+            const stringifiedData = formData.get("data");
+            formData.delete("data");
+            const data =
+              typeof stringifiedData === "string"
+                ? (JSON.parse(stringifiedData) as Record<string, unknown>)
+                : undefined;
+
+            if (data) {
+              // remove subFields
+              Object.keys(fieldInfo.subFields).forEach((subField) => {
+                delete data[subField];
+              });
+              // set new preview JSOn data
+              formData.set(
+                "data",
+                JSON.stringify({
+                  ...data,
+                  [field]: { id: "REPLACE WITH ACTUAL ID" },
+                })
+              );
+            }
+
             return formData;
           });
         });
-
-        // I need to use this to update JSON previewer
-        // setStrapiMapData((prevState) => ({
         break;
       }
 
