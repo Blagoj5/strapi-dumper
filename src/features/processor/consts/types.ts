@@ -35,7 +35,7 @@ export const parseComponent = (val: unknown) => {
     .safeParse(val);
 
   if (res.success) return res.data;
-  return false
+  return false;
 };
 export const isComponent = (val: unknown) => {
   const res = parseComponent(val);
@@ -125,7 +125,7 @@ export enum StrapiTypes {
   String = "string",
   Date = "date",
   Component = "component",
-  Relation = "relation",
+  RelationOneToOne = "relation-one-to-one",
   Media = "media",
   Number = "number",
   Boolean = "boolean",
@@ -137,13 +137,13 @@ export type Field = {
   type: StrapiTypes;
   required: boolean;
   unique: boolean;
+  subFields: {
+    [subField: string]: Field;
+  };
+};
+export type Fields = {
+  [field: string]: Field;
 };
 export type Schema = {
-  [entity: string]: {
-    [field: string]: Field & {
-      subFields?: {
-        [subField: string]: Field;
-      };
-    };
-  };
+  [entity: string]: Fields;
 };

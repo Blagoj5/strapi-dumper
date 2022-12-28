@@ -1,5 +1,4 @@
 import axios from "axios";
-import isHTML from "is-html";
 import React, { useMemo, useState } from "react";
 import JSONPretty from "react-json-pretty";
 import Button from "../../../components/Button";
@@ -12,12 +11,8 @@ import { StrapiSchema } from "../components/StrapiSchema";
 import { reserverdFields, subReserveredFields } from "../consts/reservedFields";
 import {
   Field,
+  Fields,
   isBoolean,
-  isComponent,
-  isDate,
-  isFile,
-  isNullish,
-  isNumber,
   isString,
   parseArray,
   parseComponent,
@@ -27,48 +22,11 @@ import {
   Schema,
   StrapiTypes,
 } from "../consts/types";
+import { getAvailableKeys, getFieldType } from "../utils";
+import { EntityAnalyzer } from "../utils/EntityAnalyzer";
 
 type Props = {
   jsonData: Record<string, unknown>;
-};
-
-const getAvailableKeys = (jsonData: Record<string, unknown>) => {
-  // new Set<string>
-  const availableKeysMap: Record<string, Set<string>> = {};
-  Object.entries(jsonData).forEach(([entity, entityData]) => {
-    availableKeysMap[entity] = new Set<string>();
-    const dataPerEntity = parseArray(entityData);
-    if (!parseArray(dataPerEntity)) return;
-    dataPerEntity.forEach((entityObject) => {
-      const parsedEntityObject = parseObject(entityObject);
-      Object.keys(parsedEntityObject).forEach((availableKey) => {
-        availableKeysMap[entity].add(availableKey);
-      });
-    });
-  });
-  return availableKeysMap;
-};
-
-const getFieldType = (
-  value: unknown,
-  keyMap: Field | undefined
-): StrapiTypes => {
-  if (isDate(value)) return StrapiTypes.Date;
-  // it was previously a rich text, but right now it's a string (it does not contain html)
-  if (
-    (isString(value) && isHTML(value)) ||
-    keyMap?.type === StrapiTypes.RichText
-  )
-    return StrapiTypes.RichText;
-  if (isString(value)) return StrapiTypes.String;
-  if (isFile(value)) return StrapiTypes.Media;
-  // if the previous type was component even tho it's null it's still of type component but not required
-  if (isComponent(value) || keyMap?.type === StrapiTypes.Component)
-    return StrapiTypes.Component;
-  if (isNumber(value)) return StrapiTypes.Number;
-  if (isBoolean(value)) return StrapiTypes.Boolean;
-  if (isNullish(value)) return StrapiTypes.Nullish;
-  return StrapiTypes.Unknown;
 };
 
 export const Processor = ({ jsonData }: Props) => {
@@ -87,71 +45,22 @@ export const Processor = ({ jsonData }: Props) => {
   const handleProcess = async () => {
     const formedSchema: Schema = {};
 
-    // new Set<string>
-    const availableKeysMap = getAvailableKeys(jsonData);
+    const availableKeys = getAvailableKeys(jsonData);
 
-    Object.entries(availableKeysMap).forEach(([entity, fields]) => {
+    availableKeys.forEach(({ fields, entity }) => {
+      const entityAnalyzer = new EntityAnalyzer();
       const keyToTypeMap: Schema[string] = {};
+      const entityDataArr = parseArray(jsonData[entity]);
+      const entityData = entityDataArr.map(parseObject);
       fields.forEach((field) => {
-        const dataPerEntity = parseArray(jsonData[entity]);
-        let isRequired = true;
-
-        let isUniqueString = true;
-        const uniqueValues: string[] = [];
-        dataPerEntity.forEach((entityObject) => {
-          const parsedEntityObject = parseObject(entityObject);
-
-          const availableValue = parsedEntityObject[field];
-
-          // if it's missing available value
-          if (!availableValue) isRequired = false;
-
-          const fieldType = getFieldType(availableValue, keyToTypeMap[field]);
-
-          if (isString(availableValue) && uniqueValues.includes(availableValue))
-            isUniqueString = false;
-
-          keyToTypeMap[field] = {
-            type: fieldType,
-            required: isRequired,
-            unique: false,
-            subFields: keyToTypeMap[field]?.subFields,
-          };
-
-          // if it's a component it contains subfields
-          if (fieldType === StrapiTypes.Component && availableValue) {
-            const componentFields = parseObject(availableValue);
-            const subFields = Object.keys(componentFields);
-            subFields.forEach((subField) => {
-              if (subReserveredFields.includes(subField)) return;
-
-              const subFieldType = getFieldType(
-                componentFields[subField],
-                keyToTypeMap[field].subFields?.[subField]
-              );
-              if (!keyToTypeMap[field]?.subFields) {
-                keyToTypeMap[field].subFields = {};
-              }
-
-              keyToTypeMap[field].subFields = {
-                ...keyToTypeMap[field].subFields,
-                [subField]: {
-                  type: subFieldType,
-                  required: false,
-                  unique: false,
-                },
-              };
-            });
-          }
-
-          if (fieldType === StrapiTypes.String && isString(availableValue)) {
-            keyToTypeMap[field].unique = isUniqueString;
-            uniqueValues.push(availableValue);
-          }
-
-          // TODO: worried about this
-          // isString(availableValue) &&
-          // keyToTypeMap[field]?.type !== StrapiTypes.RichText
+        entityData.forEach((entityObject) => {
+          const availableValue = entityObject[field];
+          const fieldInfo = entityAnalyzer.analyzeField(
+            field,
+            keyToTypeMap[field],
+            availableValue
+          );
+          keyToTypeMap[field] = fieldInfo;
         });
       });
 
@@ -426,7 +335,6 @@ export const Processor = ({ jsonData }: Props) => {
       const newStrapiMap: Record<string, any>[] = strapiMapData[entity].map(
         (strapiData) => {
           const object: Record<string, any> = {};
-          console.log("here");
           strapiData.forEach(function (value, key) {
             try {
               object[key] = JSON.parse(value.toString());
