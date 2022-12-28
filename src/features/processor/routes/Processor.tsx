@@ -31,7 +31,7 @@ type Props = {
 
 export const Processor = ({ jsonData }: Props) => {
   const [schema, setSchema] = useImmer<Schema | undefined>(undefined);
-  const [strapiMapData, setStrapiMapData] = useState<{
+  const [strapiMapData, setStrapiMapData] = useImmer<{
     [entity: string]: FormData[];
   }>({});
   const [processedModels, setProcessedModels] = useState<ProcessedModel[]>([]);
@@ -166,12 +166,10 @@ export const Processor = ({ jsonData }: Props) => {
         await Promise.all(mediaPromises);
 
         strapiData.append("data", JSON.stringify(data));
-        setStrapiMapData((prevState) => ({
-          ...prevState,
-          [entity]: prevState?.[entity]
-            ? [...prevState[entity], strapiData]
-            : [strapiData],
-        }));
+        setStrapiMapData((strapiMap) => {
+          if (strapiMap[entity]) strapiMap[entity].push(strapiData);
+          else strapiMap[entity] = [strapiData];
+        });
       }
     }
   };
@@ -315,6 +313,13 @@ export const Processor = ({ jsonData }: Props) => {
         };
         setSchema((stateSchema) => {
           if (stateSchema) stateSchema[entity][field] = newFieldInfo;
+        });
+
+        setStrapiMapData((strapiMap) => {
+          strapiMap[entity] = strapiMap[entity].map((formData) => {
+            formData.set(field, JSON.stringify({ id: "REPLACE WITH ACTUAL ID" }));
+            return formData;
+          });
         });
 
         // I need to use this to update JSON previewer
