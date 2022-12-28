@@ -8,10 +8,8 @@ import { useLoadconfig } from "../../../hooks/useLoadConfig";
 import { getUrlToJson } from "../../../utils/downloadObjectAsJson";
 import { StaticStrapiSchema } from "../components/StaticStrapiSchema";
 import { StrapiSchema } from "../components/StrapiSchema";
-import { reserverdFields, subReserveredFields } from "../consts/reservedFields";
+import { reserverdFields } from "../consts/reservedFields";
 import {
-  Field,
-  Fields,
   isBoolean,
   isString,
   parseArray,
@@ -22,7 +20,7 @@ import {
   Schema,
   StrapiTypes,
 } from "../consts/types";
-import { getAvailableKeys, getFieldType } from "../utils";
+import { getAvailableKeys } from "../utils";
 import { EntityAnalyzer } from "../utils/EntityAnalyzer";
 
 type Props = {
