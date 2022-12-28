@@ -3,7 +3,7 @@ import React from "react";
 import { RemoveIcon } from "../../../../assets/RemoveIcon";
 import { Text } from "../../../components/Typography";
 import { reserverdFields } from "../consts/reservedFields";
-import { Schema, StrapiTypes } from "../consts/types";
+import { Schema, StrapiType } from "../consts/types";
 
 type Props = {
   schema: Schema["string"];
@@ -11,14 +11,18 @@ type Props = {
   handleUnique: (args: { isChecked: boolean; field: string }) => void;
   handleFieldRemove: (args: { field: string }) => void;
   isChild?: boolean;
+  onStrapiTypeChange: (field: string, strapiType: StrapiType | undefined) => void;
 };
 
+const findStapiType = (val: string) =>
+  Object.values(StrapiType).find((strapiType) => strapiType === val);
 export const StrapiSchema = ({
   schema,
   handleRequired,
   handleUnique,
   handleFieldRemove,
   isChild,
+  onStrapiTypeChange,
 }: Props) => {
   return (
     <div className="flex flex-col gap-2 pt-4">
@@ -34,15 +38,18 @@ export const StrapiSchema = ({
             <div
               className={clsx("flex align-middle py-2", {
                 "bg-gray-800 pointer-events-none":
-                  fieldValue.type === StrapiTypes.Unknown,
+                  fieldValue.type === StrapiType.Unknown,
               })}
             >
               <Text className="w-40 pl-2 flex items-center">{field}</Text>
               <select
                 value={fieldValue.type}
                 className="bg-transparent font-bold text-white opacity-70 rounded-2 py-2 px-2 focus-visible:outline-0"
+                onChange={(e) =>
+                  onStrapiTypeChange(field, findStapiType(e.currentTarget.value))
+                }
               >
-                {Object.values(StrapiTypes).map((strapiType) => (
+                {Object.values(StrapiType).map((strapiType) => (
                   <option
                     key={strapiType}
                     className="bg-bg-primary"

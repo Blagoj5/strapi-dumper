@@ -3,7 +3,7 @@ import React from "react";
 import { Input } from "../../../components/Input";
 import { Subtitle, Text } from "../../../components/Typography";
 import { reserverdFields } from "../consts/reservedFields";
-import { Schema, StrapiTypes } from "../consts/types";
+import { Schema, StrapiType } from "../consts/types";
 
 type Props = {
   schema: Schema["string"];
@@ -25,7 +25,7 @@ export const StaticStrapiSchema = ({ schema }: Props) => {
             key={field}
             className={clsx("flex align-middle py-2", {
               "bg-gray-800 pointer-events-none":
-                fieldValue.type === StrapiTypes.Unknown,
+                fieldValue.type === StrapiType.Unknown,
             })}
           >
             <Text className="w-40 pl-2 flex items-center">{field}</Text>

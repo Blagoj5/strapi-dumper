@@ -18,7 +18,7 @@ import {
   parseObject,
   ProcessedModel,
   Schema,
-  StrapiTypes,
+  StrapiType,
 } from "../consts/types";
 import { getAvailableKeys } from "../utils";
 import { EntityAnalyzer } from "../utils/EntityAnalyzer";
@@ -69,6 +69,8 @@ export const Processor = ({ jsonData }: Props) => {
 
     if (!formedSchema) return;
 
+    // TODO: rework
+    // logic for showing json preview of the previsouly proccessed schema
     const entities = Object.keys(formedSchema);
     const findFieldsByType = () => {
       const fieldsMap: Record<
@@ -93,17 +95,17 @@ export const Processor = ({ jsonData }: Props) => {
           .forEach((field) => {
             const fieldType = formedSchema?.[entity][field].type;
             switch (fieldType) {
-              case StrapiTypes.String:
-              case StrapiTypes.RichText:
+              case StrapiType.String:
+              case StrapiType.RichText:
                 fieldsMap[entity].stringFields.push(field);
                 break;
-              case StrapiTypes.Boolean:
+              case StrapiType.Boolean:
                 fieldsMap[entity].booleanFields.push(field);
                 break;
-              case StrapiTypes.Media:
+              case StrapiType.Media:
                 fieldsMap[entity].mediaFields.push(field);
                 break;
-              case StrapiTypes.Component:
+              case StrapiType.Component:
                 fieldsMap[entity].componentFields.push(field);
                 break;
               default:
@@ -208,14 +210,14 @@ export const Processor = ({ jsonData }: Props) => {
       Object.entries(entityField)
         .filter(
           ([field, fieldValue]) =>
-            ![StrapiTypes.Unknown, StrapiTypes.Nullish].includes(
+            ![StrapiType.Unknown, StrapiType.Nullish].includes(
               fieldValue.type
             ) && !reserverdFields.includes(field)
         )
         .forEach(([field, fieldValue]) => {
           attributes[field] = { ...fieldValue };
 
-          if (fieldValue.type === StrapiTypes.Component) {
+          if (fieldValue.type === StrapiType.Component) {
             delete attributes[field].subFields; // remove the previsouly spreaded subFields
             attributes[field].displayName = field;
             attributes[field].repeatable = false; // TODO: add this option
@@ -238,7 +240,7 @@ export const Processor = ({ jsonData }: Props) => {
             }
           }
 
-          if (fieldValue.type === StrapiTypes.Media) {
+          if (fieldValue.type === StrapiType.Media) {
             attributes[field].multiple = false; // TODO: add this option
             attributes[field].allowedTypes = ["images"]; // TODO: handle this option
           }
@@ -299,6 +301,17 @@ export const Processor = ({ jsonData }: Props) => {
     field: string;
   }) => {
     handleFieldFlagToggle(args, "required");
+  };
+
+  const handleStrapiTypeChange = (entity: string, field: string, newStrapiType?: StrapiType) => {
+    switch (newStrapiType) {
+      case StrapiType.RelationOneToOne:
+        console.log("Major switch");
+        break;
+
+      default:
+        break;
+    }
   };
 
   const handleUnique = (args: {
@@ -391,6 +404,7 @@ export const Processor = ({ jsonData }: Props) => {
                     entity,
                   })
                 }
+                onStrapiTypeChange={(...args) => handleStrapiTypeChange(entity, ...args)}
               />
             </div>
           ))}

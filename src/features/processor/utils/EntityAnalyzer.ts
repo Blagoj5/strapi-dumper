@@ -1,6 +1,6 @@
 import { getFieldType } from ".";
 import { subReserveredFields } from "../consts/reservedFields";
-import { Field, parseObject, StrapiTypes } from "../consts/types";
+import { Field, parseObject, StrapiType } from "../consts/types";
 
 export class EntityAnalyzer {
   subFieldsAvailableKeys: { [objectField: string]: Set<string> };
@@ -70,14 +70,14 @@ export class EntityAnalyzer {
       if (initialFieldInfo.type !== fieldMap.type) {
         // special case
         if (
-          initialFieldInfo.type === StrapiTypes.RichText ||
-          fieldMap.type === StrapiTypes.RichText
+          initialFieldInfo.type === StrapiType.RichText ||
+          fieldMap.type === StrapiType.RichText
         ) {
-          return { ...fieldMap, type: StrapiTypes.RichText };
+          return { ...fieldMap, type: StrapiType.RichText };
         }
       }
 
-      if (initialFieldInfo.type === StrapiTypes.Component) {
+      if (initialFieldInfo.type === StrapiType.Component) {
         this.analyzeComponentField(field, fieldMap, value);
       }
 
@@ -92,7 +92,7 @@ export class EntityAnalyzer {
       };
     }
 
-    if (initialFieldInfo.type === StrapiTypes.Component) {
+    if (initialFieldInfo.type === StrapiType.Component) {
       this.analyzeComponentField(field, initialFieldInfo, value);
     }
 

@@ -120,7 +120,7 @@ export type ProcessedModel = {
   hint: string;
 };
 
-export enum StrapiTypes {
+export enum StrapiType {
   RichText = "richtext",
   String = "string",
   Date = "date",
@@ -134,7 +134,7 @@ export enum StrapiTypes {
 }
 
 export type Field = {
-  type: StrapiTypes;
+  type: StrapiType;
   required: boolean;
   unique: boolean;
   subFields: {

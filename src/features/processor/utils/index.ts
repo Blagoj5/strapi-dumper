@@ -1,6 +1,5 @@
 import isHTML from "is-html";
 import {
-  Field,
   isBoolean,
   isComponent,
   isDate,
@@ -10,23 +9,23 @@ import {
   isString,
   parseArray,
   parseObject,
-  StrapiTypes,
+  StrapiType,
 } from "../consts/types";
 
 export const getFieldType = (
   value: unknown
   // keyMap: Field | undefined
-): StrapiTypes => {
-  if (isDate(value)) return StrapiTypes.Date;
-  if (isString(value) && isHTML(value)) return StrapiTypes.RichText;
-  if (isString(value)) return StrapiTypes.String;
-  if (isFile(value)) return StrapiTypes.Media;
+): StrapiType => {
+  if (isDate(value)) return StrapiType.Date;
+  if (isString(value) && isHTML(value)) return StrapiType.RichText;
+  if (isString(value)) return StrapiType.String;
+  if (isFile(value)) return StrapiType.Media;
   if (isComponent(value))
-    return StrapiTypes.Component;
-  if (isNumber(value)) return StrapiTypes.Number;
-  if (isBoolean(value)) return StrapiTypes.Boolean;
-  if (isNullish(value)) return StrapiTypes.Nullish;
-  return StrapiTypes.Unknown;
+    return StrapiType.Component;
+  if (isNumber(value)) return StrapiType.Number;
+  if (isBoolean(value)) return StrapiType.Boolean;
+  if (isNullish(value)) return StrapiType.Nullish;
+  return StrapiType.Unknown;
 };
 
 export const getAvailableKeys = (jsonData: Record<string, unknown>) => {
