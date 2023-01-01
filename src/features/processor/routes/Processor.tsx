@@ -2,13 +2,10 @@ import axios from "axios";
 import React, { useMemo, useState } from "react";
 import JSONPretty from "react-json-pretty";
 import { useImmer } from "use-immer";
+import Tabs from "../../../components/Tabs";
 import Button from "../../../components/Button";
-import { Input } from "../../../components/Input";
-import { Subtitle, Text } from "../../../components/Typography";
+import { Text } from "../../../components/Typography";
 import { useLoadconfig } from "../../../hooks/useLoadConfig";
-import { getUrlToJson } from "../../../utils/downloadObjectAsJson";
-import { StaticStrapiSchema } from "../components/StaticStrapiSchema";
-import { StrapiSchema } from "../components/StrapiSchema";
 import { reserverdFields } from "../consts/reservedFields";
 import {
   Field,
@@ -18,12 +15,12 @@ import {
   parseComponent,
   parseFile,
   parseObject,
-  ProcessedModel,
   Schema,
   StrapiType,
 } from "../consts/types";
-import { getAvailableKeys } from "../utils";
+import { getAvailableKeys, getStrapiSchema } from "../utils";
 import { EntityAnalyzer } from "../utils/EntityAnalyzer";
+import { SchemaPane } from "../components/SchemaPane";
 
 type Props = {
   jsonData: Record<string, unknown>;
@@ -34,7 +31,6 @@ export const Processor = ({ jsonData }: Props) => {
   const [strapiMapData, setStrapiMapData] = useImmer<{
     [entity: string]: FormData[];
   }>({});
-  const [processedModels, setProcessedModels] = useState<ProcessedModel[]>([]);
   const { migrationEndpoint, endpoint } = useLoadconfig();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -180,93 +176,11 @@ export const Processor = ({ jsonData }: Props) => {
     setSchema(newSchema);
   };
 
-  const handleSchemaGeneration = () => {
-    if (!schema) return;
-
-    const formedSchemas: ProcessedModel[] = [];
-    Object.entries(schema).forEach(([entity, entityField]) => {
-      // e.g categories => category, choices => choice
-      const singularEntity = entity.endsWith("ies")
-        ? `${entity.slice(0, -3)}y`
-        : entity.slice(0, -1);
-
-      const formedSchema: Record<string, any> = {
-        kind: "collectionType",
-        collectionName: entity,
-        info: {
-          singularName: singularEntity,
-          displayName: singularEntity,
-          pluralName: entity,
-        },
-        options: {
-          draftAndPublish: true,
-        },
-        pluginOptions: {},
-      };
-
-      const attributes: Record<string, any> = {};
-      const components: Record<string, any>[] = [];
-
-      Object.entries(entityField)
-        .filter(
-          ([field, fieldValue]) =>
-            ![StrapiType.Unknown, StrapiType.Nullish].includes(
-              fieldValue.type
-            ) && !reserverdFields.includes(field)
-        )
-        .forEach(([field, fieldValue]) => {
-          attributes[field] = { ...fieldValue };
-
-          if (fieldValue.type === StrapiType.Component) {
-            delete attributes[field].subFields; // remove the previsouly spreaded subFields
-            attributes[field].displayName = field;
-            attributes[field].repeatable = false; // TODO: add this option
-            attributes[field].component = `${field}.${field}`; // TODO: very imporant step for creation component schema, e.g socials.socials
-            components.push({
-              collectionName: `components_${attributes[field].component}`, // e.g components_socials_socials
-              info: {
-                displayName: attributes[field].displayName,
-              },
-              options: {},
-              attributes: {},
-            });
-
-            if (fieldValue.subFields) {
-              Object.entries(fieldValue.subFields).forEach(
-                ([subField, subFieldValue]) => {
-                  attributes[subField] = { ...subFieldValue };
-                }
-              );
-            }
-          }
-
-          if (fieldValue.type === StrapiType.Media) {
-            attributes[field].multiple = false; // TODO: add this option
-            attributes[field].allowedTypes = ["images"]; // TODO: handle this option
-          }
-        });
-
-      formedSchema.attributes = attributes;
-
-      formedSchemas.push({
-        entityName: entity,
-        fileName: "schema.json",
-        url: getUrlToJson(formedSchema),
-        hint: `ROOT_DIR/src/api/${singularEntity}/content-types/${singularEntity}/schema.json`, //TODO: make dynamic
-      });
-
-      formedSchemas.push(
-        ...components.map((component) => ({
-          entityName: component.info.displayName,
-          fileName: `${component.info.displayName}.json`,
-          url: getUrlToJson(component),
-          hint: `ROOT_DIR/src/components/${component.info.displayName}/socials.json`, //TODO: make dynamic
-        }))
-      );
-    });
-
-    setProcessedModels(formedSchemas);
-  };
+  const processedModels = useMemo(() => {
+    if (!schema) return [];
+    const formedSchemas = getStrapiSchema(schema);
+    return formedSchemas;
+  }, [schema]);
 
   const handleFieldFlagToggle = (
     {
@@ -396,109 +310,94 @@ export const Processor = ({ jsonData }: Props) => {
     });
     return strapiDataEntities;
   }, [strapiMapData]);
+
+  const contentPanes = [
+    {
+      tab: "Schema",
+      component: schema ? (
+        <SchemaPane
+          handleStrapiTypeChange={handleStrapiTypeChange}
+          handleFieldRemove={handleFieldRemove}
+          handleRequired={handleRequired}
+          handleUnique={handleUnique}
+          schema={schema}
+        />
+      ) : undefined,
+    },
+    {
+      tab: "Strapi Schema",
+      component: (
+        <ul className="list-outside list-disc">
+          {processedModels.map((processedModel) => (
+            <li key={processedModel.fileName}>
+              <a
+                className="text-blue-500"
+                href={processedModel.url}
+                download={processedModel.fileName}
+              >
+                {processedModel.fileName}
+              </a>
+              <Text className="text-gray-400 text-sm">
+                (HINT: Move to {processedModel.hint})
+              </Text>
+            </li>
+          ))}
+        </ul>
+      ),
+    },
+    {
+      tab: "JSON Preview",
+      component: (
+        <div>
+          {strapiMultiData.map((data) => (
+            <div key={data.entity}>
+              <Text>{data.entity}</Text>
+              <JSONPretty
+                className="w-full overflow-scroll no-scrollbar max-h-[300px]"
+                themeClassName="__json-pretty__ no-scrollbar"
+                data={data.strapiData}
+              />
+            </div>
+          ))}
+
+          <Button
+            className="mt-4"
+            onClick={handleMapping}
+            isLoading={isLoading}
+          >
+            Start Mapping
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="mt-8">
       <Button onClick={handleProcess} disabled={disabled}>
         Process Schema
       </Button>
-
-      {showProcessed && schema && (
-        <>
-          <Subtitle>Schemas</Subtitle>
-          {Object.entries(schema).map(([entity, entitySchema]) => (
-            <div key={entity}>
-              <Text className="uppercase text-white font-bold p-2">
-                * {entity}
-              </Text>
-              <div className="flex items-center border-b border-primary py-4 mb-4">
-                <Text className="w-40 font-bold flex-shrink-0">Field</Text>
-                <Text className="w-40 font-bold flex-shrink-0">Type</Text>
-                <Text className="w-40 font-bold flex-shrink-0">Map To</Text>
-                <Text className="w-40 font-bold flex-shrink-0">Required</Text>
-                <Text className="w-40 font-bold flex-shrink-0">Unique</Text>
-                <Text className="w-40 font-bold flex-shrink-0">Remove</Text>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <StaticStrapiSchema schema={entitySchema} />
-              </div>
-
-              <StrapiSchema
-                schema={entitySchema}
-                handleFieldRemove={({ field }) =>
-                  handleFieldRemove(entity, field)
-                }
-                handleRequired={(args) =>
-                  handleRequired({
-                    ...args,
-                    entity,
-                  })
-                }
-                handleUnique={(args) =>
-                  handleUnique({
-                    ...args,
-                    entity,
-                  })
-                }
-                onStrapiTypeChange={(...args) =>
-                  handleStrapiTypeChange(entity, ...args)
-                }
-              />
-            </div>
-          ))}
-
-          <div className="flex items-center gap-6 mt-4">
-            <Text>Reserved Fields</Text>
-            <Input
-              value={reserverdFields.join(", ")}
-              onChange={() => {}}
-              disabled
-            />
-          </div>
-        </>
-      )}
-
-      {schema && (
-        <Button className="mt-4" onClick={handleSchemaGeneration}>
-          Generate models schema
-        </Button>
-      )}
-
-      <Subtitle>Generated Strapi Schemas</Subtitle>
-
-      <ul className="list-outside list-disc">
-        {processedModels.map((processedModel) => (
-          <li key={processedModel.fileName}>
-            <a
-              className="text-blue-500"
-              href={processedModel.url}
-              download={processedModel.fileName}
+      <Tabs>
+        <Tabs.Container>
+          {contentPanes
+            .map(({ tab }) => tab)
+            .map((tab) => (
+              <Tabs.Tab key={tab} id={tab.replace(" ", "-").toLowerCase()}>
+                {tab}
+              </Tabs.Tab>
+            ))}
+        </Tabs.Container>
+        <Tabs.Content>
+          {contentPanes.map((item) => (
+            <Tabs.Item
+              key={item.tab}
+              id={item.tab.replace(" ", "-").toLowerCase()}
             >
-              {processedModel.fileName}
-            </a>
-            <Text className="text-gray-400 text-sm">
-              (HINT: Move to {processedModel.hint})
-            </Text>
-          </li>
-        ))}
-      </ul>
-
-      {processedModels && <Subtitle className="mt-4">Mapping</Subtitle>}
-
-      {strapiMultiData.map((data) => (
-        <>
-          <Text>{data.entity}</Text>
-          <JSONPretty
-            className="w-full overflow-scroll no-scrollbar max-h-[300px]"
-            themeClassName="__json-pretty__ no-scrollbar"
-            data={data.strapiData}
-          />
-        </>
-      ))}
-
-      <Button className="mt-4" onClick={handleMapping} isLoading={isLoading}>
-        Start Mapping
-      </Button>
+              {item.component}
+            </Tabs.Item>
+          ))}
+        </Tabs.Content>
+      </Tabs>
     </div>
   );
 };
