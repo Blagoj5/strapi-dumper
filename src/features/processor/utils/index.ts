@@ -39,21 +39,21 @@ export const getAvailableKeys = (jsonData: Record<string, unknown>) => {
   Object.entries(jsonData).forEach(([entity, entityData]) => {
     const dataPerEntity = parseArray(entityData);
     if (!parseArray(dataPerEntity)) return;
+    const availableKeysSet = new Set<string>();
     dataPerEntity.forEach((entityObject) => {
       const parsedEntityObject = parseObject(entityObject);
-      const availableKeysSet = new Set<string>();
       Object.keys(parsedEntityObject).forEach((availableKey) => {
         availableKeysSet.add(availableKey);
       });
-      availableKeys.push({ entity, fields: availableKeysSet });
     });
+    availableKeys.push({ entity, fields: availableKeysSet });
   });
   return availableKeys;
 };
 
 export const getStrapiSchema = (schema: Schema) => {
   const formedSchemas: ProcessedModel[] = [];
-  Object.entries(schema).forEach(([entity, entityField]) => {
+  Object.entries(schema).forEach(([entity, fields]) => {
     // e.g categories => category, choices => choice
     const singularEntity = entity.endsWith("ies")
       ? `${entity.slice(0, -3)}y`
@@ -77,63 +77,65 @@ export const getStrapiSchema = (schema: Schema) => {
     const components: Record<string, any>[] = [];
 
     // TODO: make abstraction
-    Object.entries(entityField)
+    fields
       .filter(
-        ([field, fieldValue]) =>
-          ![StrapiType.Unknown, StrapiType.Nullish].includes(fieldValue.type) &&
-          !reserverdFields.includes(field)
+        (field) =>
+          ![StrapiType.Unknown, StrapiType.Nullish].includes(field.type) &&
+          !reserverdFields.includes(field.name)
       )
-      .forEach(([field, fieldValue]) => {
-        switch (fieldValue.type) {
+      .forEach((field) => {
+        switch (field.type) {
           case StrapiType.RelationOneToOne:
-            attributes[field] = {};
-            attributes[field].type = "relation";
-            attributes[field].relation = "oneToOne";
-            attributes[field].target = `api::${field}.${field}`;
+            attributes[field.name] = {};
+            attributes[field.name].type = "relation";
+            attributes[field.name].relation = "oneToOne";
+            attributes[field.name].target = `api::${field}.${field}`;
             break;
 
           case StrapiType.Media:
-            attributes[field] = {
-              type: fieldValue.type,
-              unique: fieldValue.unique,
-              required: fieldValue.required,
+            attributes[field.name] = {
+              type: field.type,
+              unique: field.unique,
+              required: field.required,
             };
-            attributes[field].multiple = false; // TODO: add this option
-            attributes[field].allowedTypes = ["images"]; // TODO: handle this option
+            attributes[field.name].multiple = false; // TODO: add this option
+            attributes[field.name].allowedTypes = ["images"]; // TODO: handle this option
             break;
 
           case StrapiType.Component:
-            attributes[field] = {
-              type: fieldValue.type,
-              unique: fieldValue.unique,
-              required: fieldValue.required,
+            attributes[field.name] = {
+              type: field.type,
+              unique: field.unique,
+              required: field.required,
             };
-            attributes[field].displayName = field;
-            attributes[field].repeatable = false; // TODO: add this option
-            attributes[field].component = `${field}.${field}`; // TODO: very imporant step for creation component schema, e.g socials.socials
+            attributes[field.name].displayName = field.name;
+            attributes[field.name].repeatable = false; // TODO: add this option
+            attributes[field.name].component = `${field.name}.${field.name}`; // TODO: very imporant step for creation component schema, e.g socials.socials
             components.push({
-              collectionName: `components_${attributes[field].component}`, // e.g components_socials_socials
+              collectionName: `components_${attributes[field.name].component}`, // e.g components_socials_socials
               info: {
-                displayName: attributes[field].displayName,
+                displayName: attributes[field.name].displayName,
               },
               options: {},
               attributes: {},
             });
 
-            if (fieldValue.subFields) {
-              Object.entries(fieldValue.subFields).forEach(
-                ([subField, subFieldValue]) => {
-                  attributes[subField] = { ...subFieldValue };
-                }
-              );
+            if (field.subFields) {
+              field.subFields.forEach((subField) => {
+                attributes[subField.name] = {
+                  type: subField.type,
+                  required: subField.required,
+                  unique: subField.unique,
+                };
+              });
             }
             break;
 
           default:
-            attributes[field] = {
-              type: fieldValue.type,
-              unique: fieldValue.unique,
-              required: fieldValue.required,
+            attributes[field.name] = {
+              type: field.type,
+              unique: field.unique,
+              required: field.required,
             };
             break;
         }

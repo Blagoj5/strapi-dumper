@@ -9,8 +9,8 @@ import { AddIcon } from "../assets/AddIcon";
 import { DuplicateIcon } from "../assets/DuplicateIcon";
 import { RemoveIcon } from "../assets/RemoveIcon";
 import Button from "../src/components/Button";
-import { Processor } from "../src/features/processor";
-import { Subtitle, Title } from "../src/components/Typography";
+import { Mapper, Processor } from "../src/features/processor";
+import { Subtitle, Title, Text } from "../src/components/Typography";
 import { downloadObjectAsJson } from "../src/utils/downloadObjectAsJson";
 import { Input } from "../src/components/Input";
 import { useLoadconfig } from "../src/hooks/useLoadConfig";
@@ -28,6 +28,7 @@ const CardPane = ({ title, children }: Props) => {
   );
 };
 export default function Home() {
+  const [showMapper, setShowMapper] = useState(false);
   const [route, setRoute] = useState("example");
   const { endpoint, migrationEndpoint, routes, setConfig } = useLoadconfig();
   const [routesJsonMap, setRoutesJsonMap] = useState<Record<string, unknown>>(
@@ -142,7 +143,21 @@ export default function Home() {
           ))}
         </div>
 
-        <Processor jsonData={routesJsonMap} />
+        <div className="flex items-center gap-3">
+          <Text>Use Mapper</Text>
+          <div className="form-check form-switch">
+            <input
+              className="form-check-input appearance-none w-9 -ml-10 rounded-full float-left h-5 align-top bg-white bg-no-repeat bg-contain bg-gray-300 focus:outline-none cursor-pointer shadow-sm"
+              checked={showMapper}
+              onChange={() => setShowMapper(!showMapper)}
+              type="checkbox"
+              role="switch"
+              id="flexSwitchCheckDefault"
+            />
+          </div>
+        </div>
+
+        {showMapper ? <Mapper jsonData={routesJsonMap} /> : <Processor jsonData={routesJsonMap} />}
       </main>
     </div>
   );

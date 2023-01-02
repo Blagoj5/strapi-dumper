@@ -3,21 +3,24 @@ import React from "react";
 import { RemoveIcon } from "../../../../assets/RemoveIcon";
 import { Text } from "../../../components/Typography";
 import { reserverdFields } from "../consts/reservedFields";
-import { Schema, StrapiType } from "../consts/types";
+import { Fields, StrapiType } from "../consts/types";
 
 type Props = {
-  schema: Schema["string"];
-  handleRequired: (args: { isChecked: boolean; field: string }) => void;
-  handleUnique: (args: { isChecked: boolean; field: string }) => void;
-  handleFieldRemove: (args: { field: string }) => void;
+  fields: Fields;
+  handleRequired: (args: { isChecked: boolean; fieldName: string }) => void;
+  handleUnique: (args: { isChecked: boolean; fieldName: string }) => void;
+  handleFieldRemove: (args: { fieldName: string }) => void;
   isChild?: boolean;
-  onStrapiTypeChange: (field: string, strapiType: StrapiType | undefined) => void;
+  onStrapiTypeChange: (
+    fieldName: string,
+    strapiType: StrapiType | undefined
+  ) => void;
 };
 
 const findStapiType = (val: string) =>
   Object.values(StrapiType).find((strapiType) => strapiType === val);
 export const StrapiSchema = ({
-  schema,
+  fields,
   handleRequired,
   handleUnique,
   handleFieldRemove,
@@ -26,11 +29,11 @@ export const StrapiSchema = ({
 }: Props) => {
   return (
     <div className="flex flex-col gap-2 pt-4">
-      {Object.entries(schema)
-        .filter(([field]) => !reserverdFields.includes(field))
-        .map(([field, fieldValue]) => (
+      {fields
+        .filter((field) => !reserverdFields.includes(field.name))
+        .map((field) => (
           <div
-            key={field}
+            key={field.name}
             className={clsx({
               "bg-black bg-opacity-50 rounded-lg": isChild,
             })}
@@ -38,15 +41,18 @@ export const StrapiSchema = ({
             <div
               className={clsx("flex align-middle py-2", {
                 "bg-gray-800 pointer-events-none":
-                  fieldValue.type === StrapiType.Unknown,
+                  field.type === StrapiType.Unknown,
               })}
             >
-              <Text className="w-40 pl-2 flex items-center">{field}</Text>
+              <Text className="w-40 pl-2 flex items-center">{field.name}</Text>
               <select
-                value={fieldValue.type}
+                value={field.type}
                 className="bg-transparent font-bold text-white opacity-70 rounded-2 py-2 px-2 focus-visible:outline-0"
                 onChange={(e) =>
-                  onStrapiTypeChange(field, findStapiType(e.currentTarget.value))
+                  onStrapiTypeChange(
+                    field.name,
+                    findStapiType(e.currentTarget.value)
+                  )
                 }
               >
                 {Object.values(StrapiType).map((strapiType) => (
@@ -62,7 +68,7 @@ export const StrapiSchema = ({
               </select>
               <input
                 type="text"
-                value={field}
+                value={field.name}
                 className="bg-black bg-opacity-30 w-40 font-bold text-white opacity-70 rounded-2 py-2 px-2 focus-visible:outline-0 ml-4 rounded-lg border border-transparent focus:border focus:border-gray-600"
                 disabled
               />
@@ -72,10 +78,10 @@ export const StrapiSchema = ({
                   onChange={(e) =>
                     handleRequired({
                       isChecked: e.currentTarget.checked,
-                      field,
+                      fieldName: field.name,
                     })
                   }
-                  checked={fieldValue.required}
+                  checked={field.required}
                   className="w-6 h-6"
                   id={`${field}-required`}
                   name={`${field}-required`}
@@ -88,10 +94,10 @@ export const StrapiSchema = ({
                   onClick={(e) =>
                     handleUnique({
                       isChecked: e.currentTarget.checked,
-                      field,
+                      fieldName: field.name,
                     })
                   }
-                  checked={fieldValue.unique}
+                  checked={field.unique}
                   className="w-6 h-6"
                   id={`${field}-unique`}
                   name={`${field}-unique`}
@@ -100,15 +106,16 @@ export const StrapiSchema = ({
               </div>
               <RemoveIcon
                 className="text-primary ml-4"
-                onClick={() => handleFieldRemove({ field })}
+                onClick={() => handleFieldRemove({ fieldName: field.name })}
               />
             </div>
-            {!!fieldValue.subFields && (
+            {!!field.subFields && (
               <StrapiSchema
-                schema={fieldValue.subFields}
+                fields={field.subFields}
                 handleRequired={handleRequired}
                 handleUnique={handleUnique}
                 handleFieldRemove={handleFieldRemove}
+                onStrapiTypeChange={onStrapiTypeChange}
                 isChild
               />
             )}

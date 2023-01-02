@@ -11,24 +11,30 @@ type Props = {
   handleRequired: (args: {
     isChecked: boolean;
     entity: string;
-    field: string;
+    fieldName: string;
   }) => void;
   handleUnique: (args: {
     isChecked: boolean;
     entity: string;
-    field: string;
+    fieldName: string;
   }) => void;
   handleStrapiTypeChange: (
     entity: string,
-    field: string,
+    fieldName: string,
     newStrapiType?: StrapiType
   ) => void;
 };
 
-export const SchemaPane = ({ schema, handleUnique, handleRequired, handleFieldRemove, handleStrapiTypeChange }: Props) => {
+export const SchemaPane = ({
+  schema,
+  handleUnique,
+  handleRequired,
+  handleFieldRemove,
+  handleStrapiTypeChange,
+}: Props) => {
   return (
     <>
-      {Object.entries(schema).map(([entity, entitySchema]) => (
+      {Object.entries(schema).map(([entity, fields]) => (
         <div key={entity}>
           <Text className="uppercase text-white font-bold p-2">* {entity}</Text>
           <div className="flex items-center border-b border-primary py-4 mb-4">
@@ -41,12 +47,14 @@ export const SchemaPane = ({ schema, handleUnique, handleRequired, handleFieldRe
           </div>
 
           <div className="flex flex-col gap-2">
-            <StaticStrapiSchema schema={entitySchema} />
+            <StaticStrapiSchema schema={fields} />
           </div>
 
           <StrapiSchema
-            schema={entitySchema}
-            handleFieldRemove={({ field }) => handleFieldRemove(entity, field)}
+            fields={fields}
+            handleFieldRemove={({ fieldName }) =>
+              handleFieldRemove(entity, fieldName)
+            }
             handleRequired={(args) =>
               handleRequired({
                 ...args,

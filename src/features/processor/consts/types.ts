@@ -134,16 +134,14 @@ export enum StrapiType {
 }
 
 export type Field = {
+  name: string;
   type: StrapiType;
   required: boolean;
   unique: boolean;
-  subFields: {
-    [subField: string]: Field;
-  };
+  subFields: Field[];
 };
-export type Fields = {
-  [field: string]: Field;
-};
+
+export type Fields = Field[];
 export type Schema = {
   [entity: string]: Fields;
 };

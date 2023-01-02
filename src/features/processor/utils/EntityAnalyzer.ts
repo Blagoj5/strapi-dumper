@@ -19,13 +19,14 @@ export class EntityAnalyzer {
     };
   };
 
-  getFieldInfo = (value: unknown): Field => {
+  getFieldInfo = (field: string, value: unknown): Field => {
     const fieldType = getFieldType(value);
     return {
+      name: field,
       type: fieldType,
       required: true,
       unique: true,
-      subFields: {},
+      subFields: [],
     };
   };
 
@@ -39,12 +40,16 @@ export class EntityAnalyzer {
         this.setSubField(field, subField);
       });
     this.subFieldsAvailableKeys[field].forEach((subField) => {
+      const subFieldIndex = fieldMap.subFields.findIndex(
+        ({ name }) => name === subField
+      );
       const subFieldInfo = this.analyzeField(
-        field,
-        fieldMap?.subFields[subField],
+        subField,
+        fieldMap.subFields[subFieldIndex],
         componentFields[subField]
       );
-      fieldMap.subFields[subField] = subFieldInfo;
+      if (subFieldIndex >= 0) fieldMap.subFields[subFieldIndex] = subFieldInfo;
+      else fieldMap.subFields.push(subFieldInfo);
     });
   };
 
@@ -55,7 +60,7 @@ export class EntityAnalyzer {
   ): Field => {
     const isAnalyzedBefore = !!fieldMap;
 
-    const initialFieldInfo = this.getFieldInfo(value);
+    const initialFieldInfo = this.getFieldInfo(field, value);
 
     if (isAnalyzedBefore) {
       // if it doesn't have value -> it's not required
